@@ -1,0 +1,21 @@
+msal>=1.25.0
+python-dotenv>=1.0.0
+pythonnet>=3.0.3
+cffi>=1.15.0
+
+# Microsoft Agent Framework
+agent-framework==1.0.0b260130
+
+# Azure Identity
+azure-identity>=1.13.0
+azure-core>=1.30.0
+
+# Semantic Kernel (Azure OpenAI integration)
+semantic-kernel>=1.0.0
+
+# Web Framework
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.0.0
+itsdangerous>=2.2.0
+python-multipart>=0.0.9

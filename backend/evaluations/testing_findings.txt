@@ -1,0 +1,17 @@
+
+> Follow up questions
+-- if multiple UNRELATED questions were asked in the same session, which implied different filters,
+the LLM is not sure how to handle the follow up question
+---- example: 
+---- Q1: "What are the top 5 Services by CSAT driven by AI?" -- includes filter: poweredbyAI = "yes"
+---- Q2: "Give me the top 5 services by SLA in 25"
+---- Q3: "now give me the CSAT for each of these services for the same period" , answer: considers this as a follow up to Q1, not Q2
+
+
+
+> Question ambiguity
+-- Some scenarios need query rewriting.
+--- example: 
+--- "I driven Services by CSAT" - answer: dax is generated without filter poweredbyAI = "yes"
+--- “Services by CSAT driven by AI” - answer: dax is generated correctly
+

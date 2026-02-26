@@ -1,0 +1,404 @@
+Query,DAX
+How many transactions for Service 'Issue Parking Reservation Permit' in Sep-24?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable2 = 
+		TREATAS({""Jan-26""}, 'DimDate'[Mon-YY])
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimServiceUni'[Service Name], ""IsGrandTotalRowTotal""),
+			__DS0FilterTable,
+			__DS0FilterTable2,
+			""Total_Transactions"", '_Measures'[Total Transactions]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(
+			502,
+			__DS0Core,
+			[IsGrandTotalRowTotal],
+			0,
+			[Total_Transactions],
+			0,
+			'DimServiceUni'[Service Name],
+			1
+		)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC,
+	[Total_Transactions] DESC,
+	'DimServiceUni'[Service Name]"
+How many of these are completed?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable2 = 
+		TREATAS({""Jan-26""}, 'DimDate'[Mon-YY])
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimServiceUni'[Service Name], ""IsGrandTotalRowTotal""),
+			__DS0FilterTable,
+			__DS0FilterTable2,
+			""Completed_Transactions"", '_Measures'[Completed Transactions]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(502, __DS0Core, [IsGrandTotalRowTotal], 0, 'DimServiceUni'[Service Name], 1)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC, 'DimServiceUni'[Service Name]"
+What was the SLA for this service in Sep-24?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable2 = 
+		TREATAS({""Jan-26""}, 'DimDate'[Mon-YY])
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimServiceUni'[Service Name], ""IsGrandTotalRowTotal""),
+			__DS0FilterTable,
+			__DS0FilterTable2,
+			""Transactions_SLA__"", '_Measures'[Transactions SLA %]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(
+			502,
+			__DS0Core,
+			[IsGrandTotalRowTotal],
+			0,
+			[Transactions_SLA__],
+			0,
+			'DimServiceUni'[Service Name],
+			1
+		)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC,
+	[Transactions_SLA__] DESC,
+	'DimServiceUni'[Service Name]"
+What was the CSAT for this service in Sep-24?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable2 = 
+		TREATAS({""Jan-26""}, 'DimDate'[Mon-YY])
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimServiceUni'[Service Name], ""IsGrandTotalRowTotal""),
+			__DS0FilterTable,
+			__DS0FilterTable2,
+			""Happy_Feedback_Percentage"", '_Measures'[Happy Feedback Percentage]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(502, __DS0Core, [IsGrandTotalRowTotal], 0, 'DimServiceUni'[Service Name], 1)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC, 'DimServiceUni'[Service Name]"
+Which service had the highest CSAT in 2025?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable2 = 
+		TREATAS({""Services""}, 'TempData'[KPI])
+
+	VAR __DS0FilterTable3 = 
+		TREATAS({""Jan-26""}, 'DimDate'[Mon-YY])
+
+	VAR __ValueFilterDM1 = 
+		FILTER(
+			KEEPFILTERS(
+				SUMMARIZECOLUMNS(
+					'DimServiceUni'[Service Name],
+					__DS0FilterTable,
+					__DS0FilterTable2,
+					__DS0FilterTable3,
+					""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received],
+					""Happy_Feedback_Percentage"", '_Measures'[Happy Feedback Percentage]
+				)
+			),
+			[Total_Feedback_Responses_Received] > 30
+		)
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimServiceUni'[Service Name], ""IsGrandTotalRowTotal""),
+			__DS0FilterTable,
+			__DS0FilterTable2,
+			__DS0FilterTable3,
+			__ValueFilterDM1,
+			""Happy_Feedback_Percentage"", '_Measures'[Happy Feedback Percentage],
+			""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(
+			502,
+			__DS0Core,
+			[IsGrandTotalRowTotal],
+			0,
+			[Happy_Feedback_Percentage],
+			0,
+			'DimServiceUni'[Service Name],
+			1
+		)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC,
+	[Happy_Feedback_Percentage] DESC,
+	'DimServiceUni'[Service Name]"
+Which service had the highest CES in Jan-25?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable2 = 
+		TREATAS({""Services""}, 'TempData'[KPI])
+
+	VAR __DS0FilterTable3 = 
+		TREATAS({""Jan-26""}, 'DimDate'[Mon-YY])
+
+	VAR __ValueFilterDM1 = 
+		FILTER(
+			KEEPFILTERS(
+				SUMMARIZECOLUMNS(
+					'DimServiceUni'[Service Name],
+					__DS0FilterTable,
+					__DS0FilterTable2,
+					__DS0FilterTable3,
+					""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received],
+					""Customer_Effort_Score"", '_Measures'[Customer Effort Score]
+				)
+			),
+			[Total_Feedback_Responses_Received] > 30
+		)
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimServiceUni'[Service Name], ""IsGrandTotalRowTotal""),
+			__DS0FilterTable,
+			__DS0FilterTable2,
+			__DS0FilterTable3,
+			__ValueFilterDM1,
+			""Customer_Effort_Score"", '_Measures'[Customer Effort Score],
+			""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(
+			502,
+			__DS0Core,
+			[IsGrandTotalRowTotal],
+			0,
+			[Customer_Effort_Score],
+			0,
+			'DimServiceUni'[Service Name],
+			1
+		)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC,
+	[Customer_Effort_Score] DESC,
+	'DimServiceUni'[Service Name]"
+Which service had the highest NPS in Jan-25?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable2 = 
+		TREATAS({""Services""}, 'TempData'[KPI])
+
+	VAR __DS0FilterTable3 = 
+		TREATAS({""Jan-26""}, 'DimDate'[Mon-YY])
+
+	VAR __ValueFilterDM1 = 
+		FILTER(
+			KEEPFILTERS(
+				SUMMARIZECOLUMNS(
+					'DimServiceUni'[Service Name],
+					__DS0FilterTable,
+					__DS0FilterTable2,
+					__DS0FilterTable3,
+					""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received],
+					""Net_Promoter_Score"", '_Measures'[Net Promoter Score]
+				)
+			),
+			[Total_Feedback_Responses_Received] > 30
+		)
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimServiceUni'[Service Name], ""IsGrandTotalRowTotal""),
+			__DS0FilterTable,
+			__DS0FilterTable2,
+			__DS0FilterTable3,
+			__ValueFilterDM1,
+			""Net_Promoter_Score"", '_Measures'[Net Promoter Score],
+			""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(
+			502,
+			__DS0Core,
+			[IsGrandTotalRowTotal],
+			0,
+			[Net_Promoter_Score],
+			0,
+			'DimServiceUni'[Service Name],
+			1
+		)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC,
+	[Net_Promoter_Score] DESC,
+	'DimServiceUni'[Service Name]"
+What is the Overall CSAT for all Services in TAMM in 2025?,"// DAX Query
+DEFINE
+	VAR __DS0FilterTable = 
+		TREATAS({""Services""}, 'TempData'[KPI])
+
+	VAR __DS0FilterTable2 = 
+		FILTER(
+			KEEPFILTERS(VALUES('DimServiceUni'[Service Name])),
+			NOT('DimServiceUni'[Service Name] IN {BLANK()})
+		)
+
+	VAR __DS0FilterTable3 = 
+		TREATAS({2025}, 'DimDate'[Year])
+
+EVALUATE
+	SUMMARIZECOLUMNS(
+		__DS0FilterTable,
+		__DS0FilterTable2,
+		__DS0FilterTable3,
+		""Happy_Feedback_Percentage"", IGNORE('_Measures'[Happy Feedback Percentage])
+	)"
+Which ADGE is negatively impacting the CSAT in Q4-2025?,"// DAX Query
+DEFINE
+	VAR __SQDS0FilterTable = 
+		TREATAS({""Services""}, 'TempData'[KPI])
+
+	VAR __SQDS0FilterTable2 = 
+		TREATAS({""Q4 - 2025""}, 'DimDate'[Qrt-Year])
+
+	VAR __SQDS0Core = 
+		SUMMARIZECOLUMNS(
+			'DimADGE'[ShortName],
+			__SQDS0FilterTable,
+			__SQDS0FilterTable2,
+			""Happy_Feedback_Percentage"", '_Measures'[Happy Feedback Percentage]
+		)
+
+	VAR __SQDS0BodyLimited = 
+		TOPN(10, __SQDS0Core, [Happy_Feedback_Percentage], 1)
+
+	VAR __ValueFilterDM2 = 
+		FILTER(
+			KEEPFILTERS(
+				SUMMARIZECOLUMNS(
+					'DimADGE'[ShortName],
+					__SQDS0BodyLimited,
+					__SQDS0FilterTable,
+					__SQDS0FilterTable2,
+					""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received],
+					""Happy_Feedback_Percentage"", '_Measures'[Happy Feedback Percentage]
+				)
+			),
+			[Total_Feedback_Responses_Received] > 30
+		)
+
+	VAR __DS0Core = 
+		SUMMARIZECOLUMNS(
+			ROLLUPADDISSUBTOTAL('DimADGE'[ShortName], ""IsGrandTotalRowTotal""),
+			__SQDS0BodyLimited,
+			__SQDS0FilterTable,
+			__SQDS0FilterTable2,
+			__ValueFilterDM2,
+			""Happy_Feedback_Percentage"", '_Measures'[Happy Feedback Percentage],
+			""Total_Feedback_Responses_Received"", '_Measures'[Total Feedback Responses Received]
+		)
+
+	VAR __DS0PrimaryWindowed = 
+		TOPN(
+			502,
+			__DS0Core,
+			[IsGrandTotalRowTotal],
+			0,
+			[Happy_Feedback_Percentage],
+			1,
+			'DimADGE'[ShortName],
+			1
+		)
+
+EVALUATE
+	__DS0PrimaryWindowed
+
+ORDER BY
+	[IsGrandTotalRowTotal] DESC, [Happy_Feedback_Percentage], 'DimADGE'[ShortName]"
+What is the CSAT for DMT during 2025?,
+Give me the toal CES for 2025,
+What are the top 5 entities by CSAT for Q4 2025?,
+Which are the top 5 services which have most count of negative feedback and are impacting their respective entities CSAT for Jan'25,
+Trend of CSAT monthly from 2025.,
+CSAT of which Entity for Jan 25 is less than the average CSAT of these Entities for 2025.,
+What is the SLA for DMT for Jan'2025?,
+Give me the total SLA for all entities in Jan 25,
+give me the top 5 services by SLA in 25,
+Give me the monthly trend of transactions in H2 25,
+Transactions of which Entities for Jan 25 is less than the average transactions of these Entities for 2025.,
+What is the Abandoned Ratio of Cancelled over Completed for following entities: DMT, SCAD, ADAFSA, DOH?
+What is the total CSAT for AI driven Services,
