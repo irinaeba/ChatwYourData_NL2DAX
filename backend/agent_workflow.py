@@ -1,15 +1,22 @@
 """
-Agent Workflow - Shared DAX Agent Components
+Agent Workflow - Multi-Agent DAX Architecture
 
-This module contains the workflow and agent creation logic used by:
-- run_devui.py (DevUI interface)
-- run_evaluation.py (Batch evaluation)
+This module implements a multi-agent architecture:
+
+Router Agent (orchestrator):
+  - extract_intent: determines domain (transactions / feedback)
+  - run_transactions_analyst: delegates to Transactions Analyst Agent
+  - run_feedback_analyst: delegates to Feedback Analyst Agent
+  - format_results: LLM formatting + chart visualization
+
+Analyst Agents (one per domain):
+  - run_dax_workflow: 3-step workflow (GenerateDAX → ExecuteDAX ↔ ValidateDAX)
 
 Exports:
-- create_dax_workflow() - Creates the 5-step executor workflow
-- run_workflow() - Runs the workflow for a single query
-- create_dax_agent() - Creates the ChatAgent with workflow tool
-- DAXAgentConfig - Configuration class
+  - create_dax_workflow() - Creates the 3-step analyst workflow
+  - run_workflow_sync() - Runs the full pipeline synchronously
+  - create_dax_agent() - Creates the Router Agent with analyst sub-agents
+  - DAXAgentConfig - Configuration class
 """
 
 import os
@@ -59,13 +66,11 @@ from agent_framework import ChatAgent, WorkflowBuilder, WorkflowOutputEvent, Cas
 from agent_framework.azure import AzureOpenAIChatClient
 from azure.identity import ClientSecretCredential
 
-# Import executors
+# Import executors (only the 3 used by analyst workflow)
 from backend.executors import (
-    ExtractIntentExecutor,
     GenerateDAXExecutor,
     ValidateDAXExecutor,
     ExecuteDAXExecutor,
-    FormatResultsExecutor,
 )
 from backend.executors.workflow_state import (
     get_workflow_state,
@@ -80,16 +85,26 @@ from backend.tools.generate_dax import DAXGenerator
 from backend.tools.validate_dax import DAXValidator
 from backend.tools.execute_dax import get_executor
 from backend.tools.format_dax_results import get_formatter
+from backend.tools.chart_visualizer import (
+    get_visualizer,
+    ChartMetadata,
+    extract_chart_metadata_from_dax,
+)
 
 # Import prompts
-from backend.prompts.agent_workflow_prompt import WORKFLOW_SYSTEM_PROMPT
+from backend.prompts.router_agent_prompt import ROUTER_AGENT_PROMPT
+from backend.prompts.analyst_agent_prompt import get_analyst_prompt
 
 logger = logging.getLogger(__name__)
 
 
+# ============================================================
+# Configuration
+# ============================================================
+
 class DAXAgentConfig:
     """Configuration for the DAX agent."""
-    
+
     def __init__(self):
         self.endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
@@ -97,7 +112,7 @@ class DAXAgentConfig:
         self.tenant_id = os.getenv("TENANT_ID")
         self.client_id = os.getenv("CLIENT_ID_OPENAI")
         self.client_secret = os.getenv("CLIENT_SECRET_OPENAI")
-    
+
     def validate(self):
         """Validate required configuration."""
         required = {
@@ -107,40 +122,62 @@ class DAXAgentConfig:
             "CLIENT_ID_OPENAI": self.client_id,
             "CLIENT_SECRET_OPENAI": self.client_secret,
         }
-        
         missing = [k for k, v in required.items() if not v]
         if missing:
             raise ValueError(f"Missing environment variables: {', '.join(missing)}")
 
 
+# ============================================================
+# Domain Registry — add new domains here
+# ============================================================
+
+DOMAIN_REGISTRY: Dict[str, Dict[str, str]] = {
+    "transactions": {
+        "description": "Services, applications, SLA, completion time, status",
+        "schema_file": "cache/schema/schema_transactions.txt",
+    },
+    "feedback": {
+        "description": "NPS, CES, CSAT, satisfaction, promoters, detractors",
+        "schema_file": "cache/schema/schema_feedback.txt",
+    },
+    # To add a new domain:
+    # "new_domain": {
+    #     "description": "...",
+    #     "schema_file": "cache/schema/schema_new_domain.txt",
+    # },
+}
+
+
+# ============================================================
+# 3-Step Analyst Workflow (GenerateDAX → ExecuteDAX ↔ ValidateDAX)
+# ============================================================
+
 def create_dax_workflow(pre_connect_powerbi: bool = True):
     """
-    Create the DAX workflow with all executors.
-    
-    Args:
-        pre_connect_powerbi: Whether to pre-connect to Power BI (default True)
-    
+    Create the 3-step analyst workflow (no extract_intent, no format_results).
+
+    The workflow:
+        GenerateDAX → ExecuteDAX ─success─→ END (emit output)
+                          │
+                          └─fail──→ ValidateDAX → ExecuteDAX (retry)
+
     Returns:
         tuple: (workflow, shared_instances dict)
     """
-    print("[INIT] Creating DAX Workflow with Executors...")
-    
-    # ========================================
+    print("[INIT] Creating 3-step Analyst Workflow...")
+
     # Pre-initialize shared instances
-    # ========================================
-    print("[PERF] Pre-initializing shared instances...")
-    
     shared = {
         "intent_extractor": IntentExtractor(),
         "dax_generator": DAXGenerator(),
         "dax_validator": DAXValidator(),
         "results_formatter": get_formatter(),
-        "dax_executor": get_executor(),  # Always create (connection deferred until token is set)
+        "chart_visualizer": get_visualizer(),
+        "dax_executor": get_executor(),
     }
-    print("[PERF] LLM instances ready")
-    print("[PERF] DAX Executor created (connection deferred until user authenticates)")
-    
-    # Pre-connect to Power BI (only when token is already available, e.g. service principal mode)
+    print("[PERF] Shared instances ready")
+
+    # Pre-connect to Power BI if requested
     if pre_connect_powerbi:
         print("[PERF] Pre-connecting to Power BI XMLA endpoint...")
         try:
@@ -148,39 +185,19 @@ def create_dax_workflow(pre_connect_powerbi: bool = True):
             print("[PERF] Power BI connection established")
         except Exception as e:
             print(f"[WARN] Could not pre-connect: {e}")
-            print("[WARN] Will connect on first query")
-    
-    # ========================================
-    # Create executors with shared instances
-    # ========================================
-    print("[INIT] Creating executor nodes...")
-    
-    extract_intent = ExtractIntentExecutor(intent_extractor=shared["intent_extractor"])
+
+    # Create executor nodes
     generate_dax = GenerateDAXExecutor(dax_generator=shared["dax_generator"])
     validate_dax = ValidateDAXExecutor(dax_validator=shared["dax_validator"])
     execute_dax = ExecuteDAXExecutor(dax_executor=shared["dax_executor"])
-    format_results = FormatResultsExecutor(results_formatter=shared["results_formatter"])
-    
-    # ========================================
-    # Build workflow pipeline with conditional edges
-    # OPTIMISTIC EXECUTION: Try execute first, validate only on failure
-    # ========================================
-    print("[INIT] Building workflow pipeline (optimistic execution)...")
-    
+
+    # Build workflow: GenerateDAX → ExecuteDAX ↔ ValidateDAX
     builder = WorkflowBuilder()
-    builder.set_start_executor(extract_intent)
-    
-    # Linear edges: Extract Intent → Generate DAX → Execute DAX (skip validation initially)
-    builder.add_edge(extract_intent, generate_dax)
-    builder.add_edge(generate_dax, execute_dax)  # Go directly to execute
-    
-    # From ValidateDAX (only runs on retry) → Execute DAX
+    builder.set_start_executor(generate_dax)
+    builder.add_edge(generate_dax, execute_dax)
     builder.add_edge(validate_dax, execute_dax)
-    
-    # Conditional edges from execute_dax based on phase
-    # - On success (phase=FORMAT): go to format_results
-    # - On retry needed (phase=RETRY_VALIDATE): go to validate_dax (first failure triggers validation)
-    # - On failure (phase=FAILED): go to format_results to show error
+
+    # Conditional: on execution failure → validate; otherwise end
     builder.add_switch_case_edge_group(
         execute_dax,
         [
@@ -188,271 +205,620 @@ def create_dax_workflow(pre_connect_powerbi: bool = True):
                 condition=lambda message: message.get("phase") == "RETRY_VALIDATE",
                 target=validate_dax,
             ),
-            Default(target=format_results),  # FORMAT, FAILED, or success all go to format
+            Default(target=None),  # End of workflow
         ],
     )
-    
+
     workflow = builder.build()
-    
-    print("[OK] Workflow pipeline (optimistic):")
-    print("     ExtractIntent -> GenerateDAX -> ExecuteDAX")
-    print("                                        |")
-    print("                          SUCCESS       |   FAIL")
-    print("                            v           v")
-    print("                      FormatResults <- ValidateDAX")
-    print("                                        |")
-    print("                                        v")
-    print("                                   ExecuteDAX (retry)")
-    
+
+    print("[OK] Analyst workflow: GenerateDAX → ExecuteDAX ↔ ValidateDAX")
     return workflow, shared
 
 
-async def run_workflow(workflow, user_query: str, access_token: str = None) -> Dict[str, Any]:
+# ============================================================
+# Run analyst workflow (async + sync wrappers)
+# ============================================================
+
+async def run_analyst_workflow(
+    workflow,
+    user_query: str,
+    intent: str,
+    schema_content: str,
+    access_token: str = None,
+) -> Dict[str, Any]:
     """
-    Run the workflow for a user query.
-    
-    Args:
-        workflow: The built workflow
-        user_query: User's natural language question
-        access_token: User's Power BI access token from frontend MSAL.js
-        
-    Returns:
-        Dict with formatted_answer and metadata
+    Run the 3-step analyst workflow for a query.
+
+    Sets up state with intent + schema (previously done by ExtractIntentExecutor),
+    then runs GenerateDAX → ExecuteDAX ↔ ValidateDAX.
     """
     start_time = time.time()
-    
-    # Reset state for new query (preserves conversation history)
-    reset_start = time.time()
+
+    # Reset state and pre-populate intent + schema
     state = reset_workflow_state()
     state.user_query = user_query
     state.original_user_query = user_query
-    state.access_token = access_token  # Set user's token for Power BI calls
-    print(f"[TIMING] State reset in {time.time() - reset_start:.3f}s")
-    
+    state.access_token = access_token
+    state.intent = intent
+    state.schema_content = schema_content
+    state.steps_completed.append("extract_intent")  # Done by router
+
     print(f"\n{'='*70}")
-    print(f"[WORKFLOW START]")
+    print(f"[ANALYST WORKFLOW] domain={intent}")
     print(f"   Query: {user_query}")
     print(f"{'='*70}")
-    
+
     final_result = None
     event_count = 0
-    last_event_time = time.time()
-    
-    stream_start = time.time()
-    print(f"[TIMING] Starting workflow stream...")
+
     async for event in workflow.run_stream(user_query):
         event_count += 1
-        now = time.time()
-        event_elapsed = now - last_event_time
-        print(f"[TIMING] Event #{event_count} received after {event_elapsed:.2f}s (type: {type(event).__name__})")
-        last_event_time = now
-        
         if isinstance(event, WorkflowOutputEvent):
             final_result = event.output
-            print(f"[TIMING] Final output event received")
-            print(f"[DEBUG] final_result keys: {final_result.keys() if final_result else 'None'}")
-            print(f"[DEBUG] chart_config in result: {final_result.get('chart_config') is not None if final_result else 'N/A'}")
-    
-    stream_elapsed = time.time() - stream_start
-    print(f"[TIMING] Workflow stream completed: {event_count} events in {stream_elapsed:.2f}s")
-    
-    # Calculate elapsed time
-    elapsed_time = time.time() - start_time
-    
-    if final_result:
-        final_result["elapsed_time"] = elapsed_time
-        return final_result
-    
-    # Fallback to state
+
+    elapsed = time.time() - start_time
+    print(f"[TIMING] Analyst workflow: {event_count} events in {elapsed:.2f}s")
+
+    # Build result from state
     state = get_workflow_state()
-    print(f"[DEBUG] Fallback: chart_config in state: {state.chart_config is not None}")
-    return {
-        "success": bool(state.formatted_answer),
-        "formatted_answer": state.formatted_answer or "No result generated",
-        "steps_completed": state.steps_completed,
-        "error": state.error,
-        "elapsed_time": elapsed_time,
-        "chart_config": state.chart_config,
-        "chart_type": state.chart_type,
-        "dax_query": state.final_dax,
+
+    result = {
+        "success": state.execution_success,
+        "columns": state.columns,
+        "data": state.data,
         "row_count": state.row_count,
+        "dax_query": state.final_dax or state.generated_dax,
+        "intent": state.intent,
+        "error": state.error,
+        "steps_completed": state.steps_completed,
         "requires_reauth": state.requires_reauth,
+        "elapsed_time": elapsed,
+        # Chart metadata from validation step
+        "chart_metric_name": state.chart_metric_name,
+        "chart_dimension": state.chart_dimension,
+        "chart_dimension_type": state.chart_dimension_type or "none",
+        # Timing
+        "step_timings": state.step_timings,
+        "dax_generation_ttft": state.dax_generation_ttft,
+        "dax_generation_ttlt": state.dax_generation_ttlt,
+    }
+
+    # Merge with final_result if available
+    if final_result:
+        result["success"] = final_result.get("success", result["success"])
+        if final_result.get("error"):
+            result["error"] = final_result["error"]
+
+    return result
+
+
+def run_analyst_workflow_sync(
+    workflow,
+    user_query: str,
+    intent: str,
+    schema_content: str,
+    access_token: str = None,
+    timeout: int = 120,
+) -> Dict[str, Any]:
+    """Run the analyst workflow synchronously in a separate thread."""
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(
+                run_analyst_workflow(workflow, user_query, intent, schema_content, access_token)
+            )
+        finally:
+            loop.close()
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(_run)
+            return future.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        return {"success": False, "error": f"Analyst timed out after {timeout}s"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================
+# Full pipeline: Router orchestrates extract_intent → analyst → format_results
+# ============================================================
+
+def run_full_pipeline(
+    shared: Dict[str, Any],
+    workflow,
+    user_query: str,
+    access_token: str = None,
+    timeout: int = 120,
+) -> Dict[str, Any]:
+    """
+    Run the full multi-agent pipeline (deterministic, no LLM routing).
+
+    1. extract_intent (keyword-based, no LLM)
+    2. analyst workflow (3-step: generate → execute ↔ validate)
+    3. format_results (LLM formatting + chart)
+
+    Returns:
+        Dict compatible with app.py's QueryResponse
+    """
+    pipeline_start = time.time()
+    step_timings = {}
+
+    print(f"\n{'='*70}")
+    print(f"[ROUTER] Starting pipeline")
+    print(f"   Query: {user_query}")
+    print(f"{'='*70}")
+
+    # ── Step 1: Extract intent ──────────────────────────────
+    t0 = time.time()
+    intent_extractor = shared["intent_extractor"]
+    intent_result = intent_extractor.extract(user_query)
+    step_timings["extract_intent"] = time.time() - t0
+
+    if not intent_result.success:
+        return {
+            "success": False,
+            "error": f"Intent extraction failed: {intent_result.error}",
+            "formatted_answer": None,
+            "steps_completed": [],
+        }
+
+    intent = intent_result.intent  # "transactions", "feedback", or "unknown"
+    schema_content = intent_result.extracted_schema
+
+    # Default unknown → transactions
+    if intent == "unknown":
+        intent = "transactions"
+        print(f"[ROUTER] Unknown intent, defaulting to TRANSACTIONS")
+
+    print(f"[ROUTER] Intent: {intent.upper()} (confidence: {intent_result.confidence:.0%})")
+    print(f"[ROUTER] Keywords: {', '.join(intent_result.matched_keywords[:5])}")
+
+    # ── Step 2: Run analyst workflow ────────────────────────
+    t0 = time.time()
+    analyst_result = run_analyst_workflow_sync(
+        workflow=workflow,
+        user_query=user_query,
+        intent=intent,
+        schema_content=schema_content,
+        access_token=access_token,
+        timeout=timeout,
+    )
+    analyst_elapsed = time.time() - t0
+
+    # Merge analyst step timings
+    if analyst_result.get("step_timings"):
+        step_timings.update(analyst_result["step_timings"])
+
+    # Check for re-auth
+    if analyst_result.get("requires_reauth"):
+        return {
+            "success": False,
+            "error": analyst_result.get("error", "Authentication required"),
+            "formatted_answer": None,
+            "steps_completed": analyst_result.get("steps_completed", []),
+            "requires_reauth": True,
+        }
+
+    # Check for failure
+    if not analyst_result.get("success"):
+        error = analyst_result.get("error", "Analyst workflow failed")
+        return {
+            "success": False,
+            "error": error,
+            "formatted_answer": _create_error_response(user_query, error, analyst_result),
+            "steps_completed": analyst_result.get("steps_completed", []),
+            "dax_query": analyst_result.get("dax_query"),
+            "chart_config": None,
+            "chart_type": "none",
+        }
+
+    # ── Step 3: Format results + chart ──────────────────────
+    t0 = time.time()
+
+    columns = analyst_result.get("columns", [])
+    data = analyst_result.get("data", [])
+    row_count = analyst_result.get("row_count", 0)
+    dax_query = analyst_result.get("dax_query")
+
+    # 3a. LLM formatting
+    results_formatter = shared["results_formatter"]
+    format_result = results_formatter.format(
+        user_query=user_query,
+        dax_query=dax_query,
+        results={"columns": columns, "data": data, "row_count": row_count},
+    )
+
+    if format_result.success:
+        formatted_answer = format_result.formatted
+    else:
+        print(f"[WARN] LLM formatting failed: {format_result.error}, using basic format")
+        formatted_answer = _create_basic_format(user_query, columns, data, row_count)
+
+    # 3b. Chart visualization
+    chart_visualizer = shared["chart_visualizer"]
+
+    chart_metadata = None
+    dim_type = analyst_result.get("chart_dimension_type", "none")
+    if dim_type and dim_type != "none":
+        chart_metadata = ChartMetadata(
+            metric_name=analyst_result.get("chart_metric_name"),
+            dimension=analyst_result.get("chart_dimension"),
+            dimension_type=dim_type,
+        )
+    elif dax_query and len(data) > 1:
+        chart_metadata = extract_chart_metadata_from_dax(
+            dax_query=dax_query, columns=columns, user_query=user_query,
+        )
+        if chart_metadata.dimension_type == "none":
+            chart_metadata = None
+
+    chart_config = None
+    chart_type = "none"
+
+    chart_result = chart_visualizer.create_visualization(
+        columns=columns,
+        data=data,
+        user_query=user_query,
+        formatted_response=formatted_answer,
+        chart_metadata=chart_metadata,
+    )
+    if chart_result.success and chart_result.chart_config:
+        chart_config = chart_result.chart_config.to_dict()
+        chart_type = chart_result.chart_type
+        print(f"[ROUTER] Chart: {chart_type} - {chart_result.chart_config.title}")
+
+    step_timings["format_results"] = time.time() - t0
+
+    # ── Build timing summary ────────────────────────────────
+    total_elapsed = time.time() - pipeline_start
+    timing_text = "\n\n---\n**⏱️ Execution Timing:**\n"
+    for step_name, step_time in step_timings.items():
+        timing_text += f"- {step_name}: {step_time:.2f}s\n"
+        if step_name == "generate_dax":
+            ttft = analyst_result.get("dax_generation_ttft")
+            ttlt = analyst_result.get("dax_generation_ttlt")
+            if ttft and ttlt:
+                gen_time = ttlt - ttft
+                timing_text += f"  - TTFT: {ttft:.2f}s | Gen: {gen_time:.2f}s | TTLT: {ttlt:.2f}s\n"
+    timing_text += f"- **Total**: {total_elapsed:.2f}s"
+    formatted_answer += timing_text
+
+    steps_completed = analyst_result.get("steps_completed", [])
+    if "format_results" not in steps_completed:
+        steps_completed.append("format_results")
+
+    print(f"\n{'='*70}")
+    print(f"[ROUTER] Pipeline complete in {total_elapsed:.2f}s")
+    print(f"   Steps: {' → '.join(steps_completed)}")
+    print(f"{'='*70}\n")
+
+    return {
+        "success": True,
+        "formatted_answer": formatted_answer,
+        "chart_config": chart_config,
+        "chart_type": chart_type,
+        "steps_completed": steps_completed,
+        "row_count": row_count,
+        "dax_query": dax_query,
+        "elapsed_time": total_elapsed,
+        "requires_reauth": False,
+        "dax_generation_ttft": analyst_result.get("dax_generation_ttft"),
+        "dax_generation_ttlt": analyst_result.get("dax_generation_ttlt"),
     }
 
 
+# Module-level storage for shared instances (set by create_dax_workflow)
+_global_shared: Dict[str, Any] = {}
+
+
+# ============================================================
+# Backward-compatible run_workflow_sync (called by app.py)
+# ============================================================
+
 def run_workflow_sync(workflow, user_query: str, timeout: int = 120, access_token: str = None) -> Dict[str, Any]:
     """
-    Run the workflow synchronously (blocking).
-    
-    This wraps run_workflow in a thread to avoid event loop conflicts.
-    
-    Args:
-        workflow: The built workflow
-        user_query: User's natural language question
-        timeout: Timeout in seconds (default 120)
-        access_token: User's Power BI access token from frontend MSAL.js
-        
-    Returns:
-        Dict with formatted_answer and metadata
-    """
-    sync_start = time.time()
-    print(f"[TIMING] run_workflow_sync started")
-    
-    def run_async_workflow():
-        """Run workflow in a new event loop in a separate thread."""
-        thread_start = time.time()
-        print(f"[TIMING] Thread started, creating event loop...")
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop_created = time.time()
-        print(f"[TIMING] Event loop created in {loop_created - thread_start:.3f}s")
-        try:
-            result = loop.run_until_complete(run_workflow(workflow, user_query, access_token=access_token))
-            print(f"[TIMING] Async workflow completed in thread: {time.time() - thread_start:.2f}s")
-            return result
-        finally:
-            loop.close()
-    
-    try:
-        # Run in a thread pool to avoid event loop conflicts
-        executor_start = time.time()
-        print(f"[TIMING] Creating ThreadPoolExecutor...")
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            print(f"[TIMING] Executor created in {time.time() - executor_start:.3f}s, submitting task...")
-            submit_start = time.time()
-            future = executor.submit(run_async_workflow)
-            print(f"[TIMING] Task submitted in {time.time() - submit_start:.3f}s, waiting for result...")
-            wait_start = time.time()
-            result = future.result(timeout=timeout)
-            print(f"[TIMING] Result received after {time.time() - wait_start:.2f}s wait")
-        print(f"[TIMING] run_workflow_sync total: {time.time() - sync_start:.2f}s")
-        return result
-    except concurrent.futures.TimeoutError:
-        return {
-            "success": False,
-            "error": f"Workflow timed out after {timeout} seconds",
-            "formatted_answer": None,
-            "steps_completed": [],
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "formatted_answer": None,
-            "steps_completed": [],
-        }
+    Run the full pipeline synchronously — drop-in replacement for old API.
 
+    app.py calls: run_workflow_sync(workflow=..., user_query=..., timeout=..., access_token=...)
+    """
+    shared = _global_shared
+    if not shared:
+        raise RuntimeError("Shared instances not initialized. Call create_dax_workflow() first.")
+
+    return run_full_pipeline(
+        shared=shared,
+        workflow=workflow,
+        user_query=user_query,
+        access_token=access_token,
+        timeout=timeout,
+    )
+
+
+# ============================================================
+# Agent creation (Router + Analyst agents)
+# ============================================================
 
 def create_dax_agent(workflow=None, shared_instances=None):
     """
-    Create the DAX agent with workflow tool.
-    
-    Args:
-        workflow: Pre-built workflow (creates new if None)
-        shared_instances: Shared tool instances (creates new if None)
-        
+    Create the Router Agent with analyst sub-agents.
+
+    This is the backward-compatible entry point called by app.py.
+    The router agent is available for interactive / DevUI usage.
+    The deterministic pipeline (run_workflow_sync) is used for the web UI.
+
     Returns:
-        ChatAgent configured with the DAX workflow tool
+        ChatAgent configured as router
     """
-    print("[INIT] Initializing DAX Agent (Workflow Mode)...")
-    
+    global _global_shared
+
+    print("[INIT] Initializing Multi-Agent Architecture...")
+
     config = DAXAgentConfig()
     config.validate()
-    
-    # Create credential
+
     credential = ClientSecretCredential(
         tenant_id=config.tenant_id,
         client_id=config.client_id,
         client_secret=config.client_secret,
     )
-    
-    # Create chat client for the agent
+
     chat_client = AzureOpenAIChatClient(
         endpoint=config.endpoint,
         credential=credential,
         deployment_name=config.deployment_name,
         api_version=config.api_version,
     )
-    
-    # Create workflow if not provided
+
     if workflow is None:
         workflow, shared_instances = create_dax_workflow()
-    
-    # ========================================
-    # Workflow Tool for Agent
-    # ========================================
-    def run_dax_workflow(user_question: str) -> str:
+
+    _global_shared = shared_instances
+
+    # ── Router Tools ────────────────────────────────────────
+
+    intent_extractor = shared_instances["intent_extractor"]
+
+    def extract_intent(user_question: str) -> str:
         """
-        Execute the complete DAX workflow for a user question.
-        
-        This tool runs a 5-step workflow:
-        1. Extract intent and load appropriate schema
-        2. Generate DAX query using LLM
-        3. Validate and improve the DAX
-        4. Execute against Power BI
-        5. Format results into human-readable text
-        
-        Each step is an Executor node with full visibility and retry support.
-        
+        Classify a user question into a domain: transactions or feedback.
+
         Args:
             user_question: The user's natural language question about data
-            
+
         Returns:
-            Formatted answer with results, explanation, and DAX query
+            JSON with intent, confidence, matched_keywords
         """
-        tool_start_time = time.time()
-        print(f"\n[TIMING] Tool called at {time.strftime('%H:%M:%S')}")
-        
+        result = intent_extractor.extract(user_question)
+        return json.dumps({
+            "intent": result.intent,
+            "confidence": result.confidence,
+            "matched_keywords": result.matched_keywords,
+        })
+
+    def run_transactions_analyst(user_question: str) -> str:
+        """
+        Send a TRANSACTIONS domain question to the Transactions Analyst.
+        The analyst generates DAX, executes it against Power BI, and returns raw results.
+
+        Args:
+            user_question: A question about transactions, services, SLA, applications
+
+        Returns:
+            JSON with columns, data, row_count, dax_query
+        """
+        return _run_analyst(workflow, shared_instances, user_question, "transactions")
+
+    def run_feedback_analyst(user_question: str) -> str:
+        """
+        Send a FEEDBACK domain question to the Feedback Analyst.
+        The analyst generates DAX, executes it against Power BI, and returns raw results.
+
+        Args:
+            user_question: A question about NPS, CES, CSAT, satisfaction, feedback
+
+        Returns:
+            JSON with columns, data, row_count, dax_query
+        """
+        return _run_analyst(workflow, shared_instances, user_question, "feedback")
+
+    def format_results(analyst_output_json: str) -> str:
+        """
+        Format raw analyst results into a readable answer with charts.
+        Call this after receiving results from an analyst agent.
+
+        Args:
+            analyst_output_json: JSON string returned by an analyst agent
+
+        Returns:
+            Formatted markdown answer with timing and chart information
+        """
         try:
-            workflow_call_start = time.time()
-            result = run_workflow_sync(workflow, user_question, timeout=120)
-            workflow_call_elapsed = time.time() - workflow_call_start
-            print(f"[TIMING] run_workflow_sync completed in {workflow_call_elapsed:.2f}s")
-            
-            # Calculate total elapsed time
-            total_elapsed = time.time() - tool_start_time
-            print(f"[TIMING] Total tool execution: {total_elapsed:.2f}s")
-            
-            # Return formatted answer or error
-            if result.get("success") and result.get("formatted_answer"):
-                answer = result["formatted_answer"]
-                # Append timing info to the answer
-                answer += f"\n\n---\n*Total execution time: {total_elapsed:.2f} seconds*"
-                return answer
-            else:
-                error = result.get("error", "Unknown error")
-                steps = result.get("steps_completed", [])
-                return f"""### Error
+            analyst_output = json.loads(analyst_output_json)
+        except json.JSONDecodeError:
+            return "Error: Could not parse analyst output."
+
+        result = _format_analyst_output(shared_instances, analyst_output)
+
+        if result.get("success"):
+            return result.get("formatted_answer", "No results.")
+        else:
+            return f"Error: {result.get('error', 'Formatting failed')}"
+
+    # ── Create Router Agent ─────────────────────────────────
+    agent = ChatAgent(
+        name="RouterAgent",
+        chat_client=chat_client,
+        instructions=ROUTER_AGENT_PROMPT,
+        tools=[extract_intent, run_transactions_analyst, run_feedback_analyst, format_results],
+    )
+
+    print("[OK] Router Agent created with tools: extract_intent, run_transactions_analyst, run_feedback_analyst, format_results")
+    print(f"[OK] Domains registered: {', '.join(DOMAIN_REGISTRY.keys())}")
+
+    return agent
+
+
+# ============================================================
+# Internal helpers
+# ============================================================
+
+def _run_analyst(workflow, shared: Dict, user_question: str, intent: str) -> str:
+    """Run an analyst workflow and return JSON result string."""
+    # Load schema for this domain
+    schema_file = DOMAIN_REGISTRY[intent]["schema_file"]
+    schema_path = project_root / schema_file
+
+    try:
+        schema_content = schema_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return json.dumps({"success": False, "error": f"Schema file not found: {schema_file}"})
+
+    # Get access token from current workflow state (set by app.py)
+    state = get_workflow_state()
+    access_token = state.access_token if state else None
+
+    result = run_analyst_workflow_sync(
+        workflow=workflow,
+        user_query=user_question,
+        intent=intent,
+        schema_content=schema_content,
+        access_token=access_token,
+        timeout=120,
+    )
+
+    # Serialize data for JSON (handle non-serializable types)
+    serializable = {
+        "success": result.get("success", False),
+        "columns": result.get("columns", []),
+        "data": _make_serializable(result.get("data", [])),
+        "row_count": result.get("row_count", 0),
+        "dax_query": result.get("dax_query"),
+        "intent": intent,
+        "error": result.get("error"),
+        "requires_reauth": result.get("requires_reauth", False),
+        "chart_metric_name": result.get("chart_metric_name"),
+        "chart_dimension": result.get("chart_dimension"),
+        "chart_dimension_type": result.get("chart_dimension_type", "none"),
+        "user_query": user_question,
+        "step_timings": result.get("step_timings", {}),
+        "dax_generation_ttft": result.get("dax_generation_ttft"),
+        "dax_generation_ttlt": result.get("dax_generation_ttlt"),
+        "steps_completed": result.get("steps_completed", []),
+    }
+
+    return json.dumps(serializable, default=str)
+
+
+def _format_analyst_output(shared: Dict, analyst_output: Dict) -> Dict[str, Any]:
+    """Format analyst output using LLM + chart visualizer."""
+    user_query = analyst_output.get("user_query", "")
+    columns = analyst_output.get("columns", [])
+    data = analyst_output.get("data", [])
+    row_count = analyst_output.get("row_count", 0)
+    dax_query = analyst_output.get("dax_query")
+
+    # LLM formatting
+    results_formatter = shared["results_formatter"]
+    format_result = results_formatter.format(
+        user_query=user_query,
+        dax_query=dax_query,
+        results={"columns": columns, "data": data, "row_count": row_count},
+    )
+
+    if format_result.success:
+        formatted_answer = format_result.formatted
+    else:
+        formatted_answer = _create_basic_format(user_query, columns, data, row_count)
+
+    # Chart visualization
+    chart_visualizer = shared["chart_visualizer"]
+    chart_metadata = None
+    dim_type = analyst_output.get("chart_dimension_type", "none")
+    if dim_type and dim_type != "none":
+        chart_metadata = ChartMetadata(
+            metric_name=analyst_output.get("chart_metric_name"),
+            dimension=analyst_output.get("chart_dimension"),
+            dimension_type=dim_type,
+        )
+    elif dax_query and len(data) > 1:
+        chart_metadata = extract_chart_metadata_from_dax(
+            dax_query=dax_query, columns=columns, user_query=user_query,
+        )
+        if chart_metadata.dimension_type == "none":
+            chart_metadata = None
+
+    chart_config = None
+    chart_type = "none"
+    chart_result = chart_visualizer.create_visualization(
+        columns=columns, data=data, user_query=user_query,
+        formatted_response=formatted_answer, chart_metadata=chart_metadata,
+    )
+    if chart_result.success and chart_result.chart_config:
+        chart_config = chart_result.chart_config.to_dict()
+        chart_type = chart_result.chart_type
+
+    return {
+        "success": True,
+        "formatted_answer": formatted_answer,
+        "chart_config": chart_config,
+        "chart_type": chart_type,
+    }
+
+
+def _make_serializable(data):
+    """Convert data rows to JSON-serializable types."""
+    result = []
+    for row in data:
+        result.append([str(v) if not isinstance(v, (int, float, bool, str, type(None))) else v for v in row])
+    return result
+
+
+def _create_basic_format(user_query, columns, data, row_count) -> str:
+    """Create basic markdown table if LLM formatting fails."""
+    lines = []
+    if columns:
+        lines.append("| " + " | ".join(str(c) for c in columns) + " |")
+        lines.append("|" + "|".join("---" for _ in columns) + "|")
+        for row in data[:15]:
+            lines.append("| " + " | ".join(str(v) for v in row) + " |")
+        if row_count > 15:
+            lines.append(f"\n...and {row_count - 15} more rows")
+
+    return f"""### Answer
+
+Based on your question: "{user_query}"
+
+### Results
+
+{chr(10).join(lines) if lines else "No results returned."}
+
+### Explanation
+
+- Query returned {row_count} row(s).
+"""
+
+
+def _create_error_response(user_query, error, analyst_result) -> str:
+    """Create error response with partial results."""
+    steps = analyst_result.get("steps_completed", [])
+    dax = analyst_result.get("dax_query")
+
+    response = f"""### Error
 
 The workflow encountered an error: **{error}**
 
 ### Steps Completed
 
 {', '.join(steps) if steps else 'None'}
-
-Please try rephrasing your question or check the connection to Power BI.
 """
-        except Exception as e:
-            error_details = traceback.format_exc()
-            print(f"[ERROR] Workflow exception: {e}")
-            print(f"[ERROR] Details: {error_details}")
-            return f"""### Error
+    if dax:
+        response += f"""
+### Generated DAX (before error)
 
-An unexpected error occurred: **{str(e)}**
-
-Please check the console logs for more details.
+```dax
+{dax}
+```
 """
-    
-    # ========================================
-    # Create Agent with Workflow Tool
-    # ========================================
-    agent = ChatAgent(
-        name="DAXAgent",
-        chat_client=chat_client,
-        instructions=WORKFLOW_SYSTEM_PROMPT,
-        tools=[run_dax_workflow]
-    )
-    
-    print("[OK] Agent created with workflow tool")
-    
-    return agent
+    return response
