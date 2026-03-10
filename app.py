@@ -681,7 +681,7 @@ async def root():
     frontend_file = frontend_dir / "index.html"
     
     if frontend_file.exists():
-        return FileResponse(frontend_file, media_type="text/html")
+        return FileResponse(str(frontend_file), media_type="text/html")
     else:
         logger.warning(f"index.html not found at {frontend_file}")
         return {

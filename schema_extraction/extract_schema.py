@@ -1,425 +1,303 @@
 """
-Extract Metadata Schema Pack
+Extract Metadata Schema Pack via XMLA Endpoint
 
-Builds an LLM-friendly denormalized schema_pack.json from XMLA DMVs.
-Uses ONLY confirmed DMV fields (no guessing, no joins).
+Extracts Power BI semantic model metadata (tables, columns, measures,
+relationships) using DAX INFO.VIEW.* functions and the MDSCHEMA_MEASURES
+DMV through the XMLA endpoint (ADOMD.NET via pyadomd).
 
-This module extracts metadata about Power BI datasets including tables, 
-columns, measures, and relationships, then generates a structured JSON output.
+Produces a denormalized schema_pack dict compatible with
+format_schema_for_prompt and split_schema.
+
+Usage:
+    from extract_schema import MetadataExtractor
+    from execute_dax import PowerBIXmlaClient
+
+    client = PowerBIXmlaClient(workspace_name, database_name,
+                                client_id=..., tenant_id=..., client_secret=...)
+    extractor = MetadataExtractor(client)
+    schema_pack = extractor.extract_all()
 """
 
-import json
-import sys
-from pathlib import Path
+import re
 from typing import Any, Dict, List
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from backend.tools.auth import load_environment, AuthenticationManager
-from execute_dax import DaxQueryExecutor
+from execute_dax import PowerBIXmlaClient
 
 
 # ============================================================
-# Type Mapping (ExplicitDataType)
+# EXTERNALMEASURE regex
 # ============================================================
-class DataTypeMapper:
-    """Maps Power BI data type codes to human-readable type names."""
+# Parses composite / DirectQuery measure wrappers:
+#   EXTERNALMEASURE("Total Transactions", INTEGER, "DirectQuery to AS - service_model")
+_EXTERNALMEASURE_RE = re.compile(
+    r'EXTERNALMEASURE\("([^"]+)",\s*(\w+),\s*"([^"]+)"\)'
+)
 
-    # Power BI data type codes to string mapping
-    TYPE_MAP = {
-        9: "string",
-        10: "datetime",
-        11: "date",
-        2: "int64",
-        3: "decimal",
-        4: "double",
-        6: "boolean",
+
+# ============================================================
+# Data Type Helpers
+# ============================================================
+
+TYPE_MAP = {
+    9: "string",
+    10: "datetime",
+    11: "date",
+    2: "int64",
+    3: "decimal",
+    4: "double",
+    6: "boolean",
+}
+
+
+def map_type(value: Any) -> str:
+    """Convert Power BI data type code to human-readable string."""
+    if value is None:
+        return "unknown"
+    if isinstance(value, (int, float)):
+        int_val = int(value)
+        if int_val in TYPE_MAP:
+            return TYPE_MAP[int_val]
+    return str(value).lower()
+
+
+def as_bool(value: Any) -> bool:
+    """Convert value to boolean."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes")
+    return False
+
+
+# ============================================================
+# Schema Extraction via DAX INFO Functions
+# ============================================================
+
+class MetadataExtractor:
+    """
+    Extracts Power BI semantic model metadata using DAX INFO.VIEW functions
+    via the Execute Queries REST API.
+
+    Uses INFO.VIEW.* (not INFO.*) because:
+      - INFO.VIEW.* work via the REST Execute Queries API on all compat levels
+      - INFO.VIEW.* pre-resolve IDs to friendly names (table name, column name)
+      - INFO.* (without VIEW) require XMLA admin permissions / higher compat level
+
+    Supplements with MDSCHEMA_MEASURES DMV for expression/folder/format data
+    that INFO.VIEW.MEASURES may return as null on composite/DirectQuery models.
+    """
+
+    # Map INFO.VIEW.COLUMNS DataType strings to our standard type names
+    DATATYPE_MAP = {
+        "String": "string",
+        "Int64": "int64",
+        "Double": "double",
+        "Decimal": "decimal",
+        "DateTime": "datetime",
+        "Date": "date",
+        "Boolean": "boolean",
+        "Binary": "binary",
     }
 
-    @staticmethod
-    def map_type(value: Any) -> str:
-        """Convert data type code to string name."""
-        if value is None:
-            return "unknown"
-        if isinstance(value, int) and value in DataTypeMapper.TYPE_MAP:
-            return DataTypeMapper.TYPE_MAP[value]
-        return str(value).lower()
+    def __init__(self, client: PowerBIXmlaClient):
+        self.client = client
 
-    @staticmethod
-    def as_bool(value: Any) -> bool:
-        """Convert value to boolean."""
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, int):
-            return value != 0
-        return False
+    # ----------------------------------------------------------
+    # Individual fetch methods
+    # ----------------------------------------------------------
 
+    def fetch_tables(self) -> List[Dict[str, Any]]:
+        """Fetch table metadata via INFO.VIEW.TABLES()."""
+        print("   Fetching tables (INFO.VIEW.TABLES)...")
+        return self.client.execute_dax("EVALUATE INFO.VIEW.TABLES()")
 
-# ============================================================
-# DMV Query Helper
-# ============================================================
-class DMVReader:
-    """Handles reading DMV results with ordinal-prefixed column names."""
+    def fetch_columns(self) -> List[Dict[str, Any]]:
+        """Fetch column metadata via INFO.VIEW.COLUMNS()."""
+        print("   Fetching columns (INFO.VIEW.COLUMNS)...")
+        return self.client.execute_dax("EVALUATE INFO.VIEW.COLUMNS()")
 
-    @staticmethod
-    def process_reader(reader) -> List[Dict[str, Any]]:
+    def fetch_measures(self) -> List[Dict[str, Any]]:
+        """Fetch measure metadata via INFO.VIEW.MEASURES()."""
+        print("   Fetching measures (INFO.VIEW.MEASURES)...")
+        return self.client.execute_dax("EVALUATE INFO.VIEW.MEASURES()")
+
+    def fetch_measures_dmv(self) -> Dict[str, Dict[str, str]]:
         """
-        Convert ADOMD reader to list of dictionaries with ordinal-prefixed column names.
-        
-        This ensures safe column name handling by prefixing with column index.
-        Example: c0_ID, c1_Name, c2_IsHidden
-        """
-        # Create column names with ordinal prefix
-        columns = [f"c{i}_{reader.GetName(i)}" for i in range(reader.FieldCount)]
-        rows: List[Dict[str, Any]] = []
+        Fetch measure expressions, folders, and format strings from MDSCHEMA_MEASURES DMV.
 
-        # Read all rows from DMV result
-        while reader.Read():
-            row = {}
-            for i, col_name in enumerate(columns):
-                value = reader.GetValue(i)
-                row[col_name] = None if value is None else value
-            rows.append(row)
+        INFO.VIEW.MEASURES returns null for Expression and FormatString on
+        composite/DirectQuery models. The MDSCHEMA_MEASURES DMV exposes
+        the expression text, display folders, and format strings.
 
-        return rows
-
-
-# ============================================================
-# Metadata Extractor
-# ============================================================
-class MetadataExtractor:
-    """Extracts and structures Power BI metadata from XMLA DMVs."""
-
-    def __init__(self, executor: DaxQueryExecutor):
-        """Initialize with a DAX query executor."""
-        self.executor = executor
-        self.tables = {}
-        self.columns_by_table = {}
-        self.column_name_by_id = {}
-        self.measures = []
-        self.relationships = []
-        self.linguistic_metadata = []
-
-    def fetch_all_metadata(self) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        Execute all DMV queries to fetch metadata.
-        
         Returns:
-            Dictionary with keys: tables, columns, measures, relationships
+            dict: measure_name -> {"expression": ..., "folder": ..., "formatString": ...}
         """
-        print("Fetching tables...")
-        tables = self._execute_dmv_query("""
-            SELECT
-              [ID],
-              [Name],
-              [IsHidden],
-              [Description]
-            FROM $SYSTEM.TMSCHEMA_TABLES
-        """)
-
-        print("Fetching columns...")
-        columns = self._execute_dmv_query("""
-            SELECT
-              [ID],
-              [TableID],
-              [ExplicitName],
-              [ExplicitDataType],
-              [IsHidden],
-              [IsKey],
-              [IsNullable],
-              [FormatString],
-              [SourceColumn],
-              [Description]
-            FROM $SYSTEM.TMSCHEMA_COLUMNS
-        """)
-
-        print("Fetching measures...")
-        measures = self._execute_dmv_query("""
-            SELECT
-              [ID],
-              [Name],
-              [Expression],
-              [FormatString],
-              [IsHidden],
-              [TableID],
-              [DisplayFolder],
-              [Description]
-            FROM $SYSTEM.TMSCHEMA_MEASURES
-        """)
-
-        print("Fetching relationships...")
-        relationships = self._execute_dmv_query("""
-            SELECT
-              [ID],
-              [Name],
-              [IsActive],
-              [Type],
-              [CrossFilteringBehavior],
-              [JoinOnDateBehavior],
-              [FromTableID],
-              [FromColumnID],
-              [ToTableID],
-              [ToColumnID],
-              [FromCardinality],
-              [ToCardinality]
-            FROM $SYSTEM.TMSCHEMA_RELATIONSHIPS
-        """)
-
-        # Try to fetch linguistic metadata (Q&A synonyms) - may not be available in all models
-        print("Fetching linguistic metadata (Q&A synonyms)...")
-        linguistic_metadata = []
+        print("   Supplementing measures (MDSCHEMA_MEASURES DMV)...")
         try:
-            # First try with SELECT * to discover available columns
-            linguistic_metadata = self._execute_dmv_query("""
-                SELECT *
-                FROM $SYSTEM.TMSCHEMA_LINGUISTIC_METADATA
-            """)
-            print(f"  Found {len(linguistic_metadata)} linguistic metadata entries")
-        except Exception as e:
-            print(f"  Warning: Could not fetch linguistic metadata: {e}")
-            print("  Continuing without Q&A synonyms...")
+            rows = self.client.execute_dax(
+                "SELECT MEASURE_NAME, EXPRESSION, MEASURE_DISPLAY_FOLDER, "
+                "DEFAULT_FORMAT_STRING "
+                "FROM $SYSTEM.MDSCHEMA_MEASURES"
+            )
+            dmv_map = {}
+            for row in rows:
+                name = row.get("MEASURE_NAME", "")
+                if name:
+                    dmv_map[name] = {
+                        "expression": row.get("EXPRESSION") or "",
+                        "folder": row.get("MEASURE_DISPLAY_FOLDER") or "",
+                        "formatString": row.get("DEFAULT_FORMAT_STRING") or "",
+                    }
+            return dmv_map
+        except RuntimeError as e:
+            print(f"   ⚠️  DMV query failed (non-fatal): {e}")
+            return {}
 
-        return {
-            "tables": tables,
-            "columns": columns,
-            "measures": measures,
-            "relationships": relationships,
-            "linguistic_metadata": linguistic_metadata,
-        }
+    def fetch_relationships(self) -> List[Dict[str, Any]]:
+        """Fetch relationship metadata via INFO.VIEW.RELATIONSHIPS()."""
+        print("   Fetching relationships (INFO.VIEW.RELATIONSHIPS)...")
+        return self.client.execute_dax("EVALUATE INFO.VIEW.RELATIONSHIPS()")
 
-    def _execute_dmv_query(self, query: str) -> List[Dict[str, Any]]:
-        """Execute a DMV query and return processed rows."""
-        result = self.executor.execute_with_metadata(query)
-        # Reconstruct the ordinal-prefixed column format for compatibility
-        return self._convert_to_ordinal_format(result)
+    # ----------------------------------------------------------
+    # Main extraction method
+    # ----------------------------------------------------------
 
-    @staticmethod
-    def _convert_to_ordinal_format(result: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Convert standard result format to ordinal-prefixed column names."""
-        columns = result["columns"]
-        rows = []
-        for data_row in result["data"]:
-            row = {}
-            for i, col_name in enumerate(columns):
-                row[f"c{i}_{col_name}"] = data_row[i]
-            rows.append(row)
-        return rows
-
-    def build_schema_pack(self, metadata: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
+    def extract_all(self) -> Dict[str, Any]:
         """
-        Build denormalized schema pack from metadata.
-        
-        Organizes tables, columns, measures, relationships, and linguistic metadata
-        into a single structured format suitable for LLM consumption.
+        Extract all metadata and build a schema pack compatible with
+        the existing format_schema_for_prompt and split_schema tools.
+
+        INFO.VIEW.* functions return friendly names directly (e.g., Table name
+        instead of TableID), so no ID-based lookups are needed.
+
+        Returns:
+            dict: Schema pack with model.tables, model.measures,
+                  model.relationships, model.linguistic_metadata
         """
-        tables_rows = metadata["tables"]
-        columns_rows = metadata["columns"]
-        measures_rows = metadata["measures"]
-        relationships_rows = metadata["relationships"]
-        linguistic_rows = metadata.get("linguistic_metadata", [])
+        # Fetch raw metadata via INFO.VIEW functions
+        tables_raw = self.fetch_tables()
+        columns_raw = self.fetch_columns()
+        measures_raw = self.fetch_measures()
+        relationships_raw = self.fetch_relationships()
 
-        # Process tables
-        self._process_tables(tables_rows)
+        # Supplement measures from MDSCHEMA_MEASURES DMV
+        # (INFO.VIEW.MEASURES returns null Expression on composite/DQ models)
+        measures_dmv = self.fetch_measures_dmv()
 
-        # Process columns
-        self._process_columns(columns_rows)
-
-        # Process measures
-        self._process_measures(measures_rows)
-
-        # Process relationships
-        self._process_relationships(relationships_rows)
-
-        # Process linguistic metadata (Q&A synonyms)
-        self._process_linguistic_metadata(linguistic_rows)
-
-        # Return final schema pack structure
-        return {
-            "model": {
-                "tables": list(self.tables.values()),
-                "measures": self.measures,
-                "relationships": self.relationships,
-                "linguistic_metadata": self.linguistic_metadata,
-            }
-        }
-
-    def _process_tables(self, tables_rows: List[Dict[str, Any]]):
-        """Extract table definitions from DMV results."""
-        for row in tables_rows:
-            table_id = int(row["c0_ID"])
-            self.tables[table_id] = {
-                "name": row["c1_Name"],
-                "hidden": DataTypeMapper.as_bool(row["c2_IsHidden"]),
-                "description": row.get("c3_Description") or "",
+        # --- Process tables ---
+        table_map = {}  # table_name -> table dict
+        for row in tables_raw:
+            name = row.get("Name", "")
+            table_map[name] = {
+                "name": name,
+                "hidden": as_bool(row.get("IsHidden", False)),
+                "description": row.get("Description") or "",
                 "columns": [],
             }
-            self.columns_by_table[table_id] = []
 
-    def _process_columns(self, columns_rows: List[Dict[str, Any]]):
-        """Extract column definitions and associate with tables."""
-        for row in columns_rows:
-            column_id = int(row["c0_ID"])
-            table_id = int(row["c1_TableID"])
+        # --- Process columns ---
+        for row in columns_raw:
+            table_name = row.get("Table", "")
+            col_type_str = row.get("Type", "")
 
-            # Build column definition
-            column_def = {
-                "name": row["c2_ExplicitName"],
-                "type": DataTypeMapper.map_type(row["c3_ExplicitDataType"]),
-                "hidden": DataTypeMapper.as_bool(row["c4_IsHidden"]),
-                "isKey": DataTypeMapper.as_bool(row["c5_IsKey"]),
-                "isNullable": DataTypeMapper.as_bool(row["c6_IsNullable"]),
-                "formatString": row["c7_FormatString"],
-                "sourceColumn": row["c8_SourceColumn"],
-                "description": row.get("c9_Description") or "",
+            # Skip RowNumber columns (internal)
+            if col_type_str == "RowNumber":
+                continue
+
+            # Map the DataType string to our standard types
+            data_type_raw = row.get("DataType", "")
+            data_type = self.DATATYPE_MAP.get(
+                data_type_raw, data_type_raw.lower() if data_type_raw else "unknown"
+            )
+
+            col_def = {
+                "name": row.get("Name", ""),
+                "type": data_type,
+                "hidden": as_bool(row.get("IsHidden", False)),
+                "isKey": as_bool(row.get("IsKey", False)),
+                "isNullable": as_bool(row.get("IsNullable", True)),
+                "formatString": row.get("FormatString"),
+                "sourceColumn": row.get("SourceColumn"),
+                "description": row.get("Description") or "",
             }
 
-            # Track column ID for relationship building
-            self.column_name_by_id[column_id] = column_def["name"]
+            if table_name in table_map:
+                table_map[table_name]["columns"].append(col_def)
 
-            # Add column to its table
-            if table_id in self.columns_by_table:
-                self.columns_by_table[table_id].append(column_def)
+        # --- Process measures ---
+        measures = []
+        for row in measures_raw:
+            name = row.get("Name", "")
+            dmv_data = measures_dmv.get(name, {})
 
-        # Attach columns to their parent tables
-        for table_id, columns in self.columns_by_table.items():
-            if table_id in self.tables:
-                self.tables[table_id]["columns"] = columns
-
-    def _process_measures(self, measures_rows: List[Dict[str, Any]]):
-        """Extract measure definitions."""
-        for row in measures_rows:
-            table_id = int(row["c5_TableID"])
-            table_name = self.tables.get(table_id, {}).get("name")
+            # Prefer INFO.VIEW values; fall back to DMV
+            expression = row.get("Expression") or dmv_data.get("expression", "")
+            folder = row.get("DisplayFolder") or dmv_data.get("folder", "")
+            format_string = row.get("FormatString") or dmv_data.get("formatString")
 
             measure_def = {
-                "name": row["c1_Name"],
-                "table": table_name,
-                "expression": row["c2_Expression"],
-                "formatString": row["c3_FormatString"],
-                "hidden": DataTypeMapper.as_bool(row["c4_IsHidden"]),
-                "folder": row.get("c6_DisplayFolder") or "",
-                "description": row.get("c7_Description") or "",
+                "name": name,
+                "table": row.get("Table", ""),
+                "expression": expression,
+                "formatString": format_string,
+                "hidden": as_bool(row.get("IsHidden", False)),
+                "folder": folder,
+                "description": row.get("Description") or "",
             }
-            self.measures.append(measure_def)
 
-    def _process_relationships(self, relationships_rows: List[Dict[str, Any]]):
-        """Extract relationship definitions."""
-        for row in relationships_rows:
-            from_table_id = int(row["c6_FromTableID"])
-            from_column_id = int(row["c7_FromColumnID"])
-            to_table_id = int(row["c8_ToTableID"])
-            to_column_id = int(row["c9_ToColumnID"])
+            # Parse EXTERNALMEASURE wrapper (composite / DirectQuery models)
+            em_match = _EXTERNALMEASURE_RE.match(expression)
+            if em_match:
+                _, data_type, source = em_match.groups()
+                measure_def["dataType"] = data_type
+                measure_def["expression"] = f'"{source}"'
 
-            # Validate that all referenced entities exist
-            if from_table_id not in self.tables or to_table_id not in self.tables:
-                continue
-            if from_column_id not in self.column_name_by_id or to_column_id not in self.column_name_by_id:
-                continue
+            measures.append(measure_def)
 
-            # Build relationship definition
-            relationship_def = {
-                "name": row["c1_Name"],
-                "fromTable": self.tables[from_table_id]["name"],
-                "fromColumn": self.column_name_by_id[from_column_id],
-                "toTable": self.tables[to_table_id]["name"],
-                "toColumn": self.column_name_by_id[to_column_id],
-                "active": DataTypeMapper.as_bool(row["c2_IsActive"]),
-                "crossFilter": row["c4_CrossFilteringBehavior"],
-                "fromCardinality": row["c10_FromCardinality"],
-                "toCardinality": row["c11_ToCardinality"],
+        # --- Process relationships ---
+        # Cardinality comes as strings ("Many", "One") — map to ints (2, 1)
+        # so the formatter's CARDINALITY_SHORT dict works correctly.
+        CARD_STR_TO_INT = {"Many": 2, "One": 1, "None": 0}
+
+        relationships = []
+        for row in relationships_raw:
+            from_card_raw = row.get("FromCardinality")
+            to_card_raw = row.get("ToCardinality")
+
+            from_card = (
+                CARD_STR_TO_INT.get(from_card_raw, from_card_raw)
+                if isinstance(from_card_raw, str) else from_card_raw
+            )
+            to_card = (
+                CARD_STR_TO_INT.get(to_card_raw, to_card_raw)
+                if isinstance(to_card_raw, str) else to_card_raw
+            )
+
+            rel_def = {
+                "name": row.get("Name") or "",
+                "fromTable": row.get("FromTable", ""),
+                "fromColumn": row.get("FromColumn", ""),
+                "toTable": row.get("ToTable", ""),
+                "toColumn": row.get("ToColumn", ""),
+                "active": as_bool(row.get("IsActive", True)),
+                "crossFilter": row.get("CrossFilteringBehavior"),
+                "fromCardinality": from_card,
+                "toCardinality": to_card,
             }
-            self.relationships.append(relationship_def)
+            relationships.append(rel_def)
 
-    def _process_linguistic_metadata(self, linguistic_rows: List[Dict[str, Any]]):
-        """
-        Extract Q&A linguistic metadata (synonyms/terms) from DMV results.
-        
-        The Content field contains XML or JSON with synonym definitions for
-        tables and columns used by Power BI Q&A feature.
-        
-        Note: Column names vary by model, so we search for common patterns.
-        """
-        for row in linguistic_rows:
-            # Find TableID column (might be c0_, c1_, etc.)
-            table_id = None
-            column_id = None
-            content = None
-            
-            for key, value in row.items():
-                key_lower = key.lower()
-                if "tableid" in key_lower and value is not None:
-                    table_id = int(value)
-                elif "columnid" in key_lower and value is not None:
-                    column_id = int(value)
-                elif "content" in key_lower and value is not None:
-                    content = str(value)
-            
-            # Determine which object this metadata applies to
-            table_name = None
-            column_name = None
-            
-            if table_id is not None:
-                table_name = self.tables.get(table_id, {}).get("name")
-            
-            if column_id is not None:
-                column_name = self.column_name_by_id.get(column_id)
-            
-            # Only add if we have meaningful content
-            if content:
-                linguistic_def = {
-                    "tableName": table_name,
-                    "columnName": column_name,
-                    "content": content,
-                }
-                self.linguistic_metadata.append(linguistic_def)
+        # Build final schema pack
+        schema_pack = {
+            "model": {
+                "tables": list(table_map.values()),
+                "measures": measures,
+                "relationships": relationships,
+                "linguistic_metadata": [],  # Not available via INFO.VIEW; empty is fine
+            }
+        }
+
+        return schema_pack
 
 
-# ============================================================
-# Main Orchestration
-# ============================================================
-def main():
-    """Main execution flow for metadata extraction."""
-    # Load environment variables and validate required configs
-    tenant_id, client_id, _, workspace_name, database_name, adomd_dll = load_environment()
-
-    # Authenticate using device flow (no persistent cache)
-    # This is a development utility script - production uses OBO flow
-    auth_manager = AuthenticationManager(
-        tenant_id, 
-        client_id, 
-        persist_cache=False,  # Don't persist tokens to disk
-    )
-    access_token = auth_manager.acquire_token()
-
-    # Create XMLA endpoint URL for Power BI workspace
-    xmla_endpoint = f"powerbi://api.powerbi.com/v1.0/myorg/{workspace_name}"
-
-    # Initialize DAX executor for running DMV queries
-    executor = DaxQueryExecutor(adomd_dll, workspace_name, database_name, access_token)
-
-    # Use context manager to ensure connection cleanup
-    with executor:
-        # Extract all metadata from DMVs
-        metadata_extractor = MetadataExtractor(executor)
-        metadata = metadata_extractor.fetch_all_metadata()
-
-        # Build denormalized schema pack suitable for LLM consumption
-        schema_pack = metadata_extractor.build_schema_pack(metadata)
-
-        # Write results to JSON file in output directory
-        output_dir = Path(__file__).with_name("out")
-        output_dir.mkdir(exist_ok=True)
-        output_path = output_dir / "schema_pack_new.json"
-
-        output_path.write_text(
-            json.dumps(schema_pack, indent=2, ensure_ascii=False),
-            encoding="utf-8"
-        )
-
-        print("✅ schema_pack.json generated")
-        print(output_path)
-
-
-# if __name__ == "__main__":
-#     main()

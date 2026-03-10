@@ -530,12 +530,16 @@ class SchemaPackFormatter:
                 self.lines.append(f"Measure: {measure['name']}")
 
                 desc = (measure.get("description") or "").strip()
-                if desc:
-                    self.lines.append(f"  Description: {desc}")
+                self.lines.append(f"  Description: {desc if desc else 'N/A'}")
 
                 folder = (measure.get("folder") or "").strip()
                 if folder:
                     self.lines.append(f"  Folder: {folder}")
+
+                # Data type (present when expression is an EXTERNALMEASURE wrapper)
+                data_type = (measure.get("dataType") or "").strip()
+                if data_type:
+                    self.lines.append(f"  Type: {data_type}")
 
                 fmt = (measure.get("formatString") or "").strip()
                 if fmt:
