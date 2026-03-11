@@ -288,22 +288,6 @@ async def startup_event():
         logger.info("Using Power BI REST API (no XMLA connection needed)")
         app_state.workflow, app_state.shared_instances = create_dax_workflow(pre_connect_powerbi=False)
         
-        # Verify prompts are loaded fresh from disk
-        from backend.tools.generate_dax import get_dax_generator_prompt
-        from backend.tools.validate_dax import get_dax_validator_prompt
-        
-        logger.info("Verifying prompts are loaded from disk...")
-        gen_prompt_tx = get_dax_generator_prompt("TRANSACTIONS")
-        gen_prompt_fb = get_dax_generator_prompt("FEEDBACK")
-        val_prompt_tx = get_dax_validator_prompt("TRANSACTIONS")
-        val_prompt_fb = get_dax_validator_prompt("FEEDBACK")
-        
-        logger.info(f"  ├─ Generator TRANSACTIONS: {len(gen_prompt_tx)} chars - '{gen_prompt_tx[1:50].strip()}...'")
-        logger.info(f"  ├─ Generator FEEDBACK: {len(gen_prompt_fb)} chars - '{gen_prompt_fb[1:50].strip()}...'")
-        logger.info(f"  ├─ Validator TRANSACTIONS: {len(val_prompt_tx)} chars - '{val_prompt_tx[1:50].strip()}...'")
-        logger.info(f"  └─ Validator FEEDBACK: {len(val_prompt_fb)} chars - '{val_prompt_fb[1:50].strip()}...'")
-        logger.info("[OK] All prompts loaded fresh from disk")
-        
         # Create agent with workflow tool
         app_state.agent = create_dax_agent(
             workflow=app_state.workflow,

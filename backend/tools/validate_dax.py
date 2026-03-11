@@ -51,15 +51,20 @@ def _load_prompt_from_file(filepath: Path, variable_name: str) -> str:
 
 def get_dax_validator_prompt(intent: str) -> str:
     """
-    Get the DAX validator prompt for the given intent.
+    Get the DAX validator prompt for the given intent/domain.
     Loads fresh from disk each time to ensure latest changes are used.
+
+    Convention: file = dax_validator_prompt_{domain}.py
+               var  = DAX_VALIDATOR_PROMPT_{DOMAIN}
     """
-    if intent.upper() == "TRANSACTIONS":
-        filepath = _project_root / "backend" / "prompts" / "dax_validator_prompt_transactions.py"
-        return _load_prompt_from_file(filepath, "DAX_VALIDATOR_PROMPT_TRANSACTIONS")
-    else:  # Default to FEEDBACK
-        filepath = _project_root / "backend" / "prompts" / "dax_validator_prompt_feedback.py"
-        return _load_prompt_from_file(filepath, "DAX_VALIDATOR_PROMPT_FEEDBACK")
+    domain = intent.strip().lower()
+    filepath = _project_root / "backend" / "prompts" / f"dax_validator_prompt_{domain}.py"
+    variable = f"DAX_VALIDATOR_PROMPT_{domain.upper()}"
+    if not filepath.exists():
+        raise FileNotFoundError(
+            f"No validator prompt for domain '{domain}': expected {filepath}"
+        )
+    return _load_prompt_from_file(filepath, variable)
 
 
 load_dotenv()

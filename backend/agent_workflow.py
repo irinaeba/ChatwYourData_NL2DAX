@@ -4,9 +4,8 @@ Agent Workflow - Multi-Agent DAX Architecture
 This module implements a multi-agent architecture:
 
 Router Agent (orchestrator):
-  - extract_intent: determines domain (transactions / feedback)
-  - run_transactions_analyst: delegates to Transactions Analyst Agent
-  - run_feedback_analyst: delegates to Feedback Analyst Agent
+  - extract_intent: determines domain (transactions / feedback / ...)
+  - run_analyst: delegates to the analyst for the detected domain
   - format_results: LLM formatting + chart visualization
 
 Analyst Agents (one per domain):
@@ -597,31 +596,21 @@ def create_dax_agent(workflow=None, shared_instances=None):
             "matched_keywords": result.matched_keywords,
         })
 
-    def run_transactions_analyst(user_question: str) -> str:
+    def run_analyst(user_question: str, intent: str) -> str:
         """
-        Send a TRANSACTIONS domain question to the Transactions Analyst.
+        Send a question to the analyst for a given domain/intent.
         The analyst generates DAX, executes it against Power BI, and returns raw results.
 
         Args:
-            user_question: A question about transactions, services, SLA, applications
+            user_question: The user's natural language question about data
+            intent: The domain/intent (e.g. "transactions", "feedback")
 
         Returns:
             JSON with columns, data, row_count, dax_query
         """
-        return _run_analyst(workflow, shared_instances, user_question, "transactions")
-
-    def run_feedback_analyst(user_question: str) -> str:
-        """
-        Send a FEEDBACK domain question to the Feedback Analyst.
-        The analyst generates DAX, executes it against Power BI, and returns raw results.
-
-        Args:
-            user_question: A question about NPS, CES, CSAT, satisfaction, feedback
-
-        Returns:
-            JSON with columns, data, row_count, dax_query
-        """
-        return _run_analyst(workflow, shared_instances, user_question, "feedback")
+        if intent not in DOMAIN_REGISTRY:
+            return json.dumps({"success": False, "error": f"Unknown domain: {intent}. Valid: {list(DOMAIN_REGISTRY.keys())}"})
+        return _run_analyst(workflow, shared_instances, user_question, intent)
 
     def format_results(analyst_output_json: str) -> str:
         """
@@ -651,10 +640,10 @@ def create_dax_agent(workflow=None, shared_instances=None):
         name="RouterAgent",
         chat_client=chat_client,
         instructions=ROUTER_AGENT_PROMPT,
-        tools=[extract_intent, run_transactions_analyst, run_feedback_analyst, format_results],
+        tools=[extract_intent, run_analyst, format_results],
     )
 
-    print("[OK] Router Agent created with tools: extract_intent, run_transactions_analyst, run_feedback_analyst, format_results")
+    print("[OK] Router Agent created with tools: extract_intent, run_analyst, format_results")
     print(f"[OK] Domains registered: {', '.join(DOMAIN_REGISTRY.keys())}")
 
     return agent
