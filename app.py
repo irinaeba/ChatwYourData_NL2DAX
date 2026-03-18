@@ -52,9 +52,8 @@ logger = logging.getLogger(__name__)
 # Import workflow from backend folder
 from backend.agent_workflow import (
     create_dax_workflow,
-    run_workflow_sync,
-    create_dax_agent,
-    DAXAgentConfig
+    run_pipeline_sync,
+    DAXAgentConfig,
 )
 from backend.tools.auth import load_environment, AzureOpenAIConfig
 from backend.auth import (
@@ -129,6 +128,10 @@ class QueryResponse(BaseModel):
         default=None,
         description="Time to Last Token for DAX generation (seconds)"
     )
+    timing: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Structured pipeline timing breakdown"
+    )
 
 
 class HealthResponse(BaseModel):
@@ -163,7 +166,6 @@ class AppState:
         self.initialized = False
         self.workflow = None  # Development workflow
         self.shared_instances = None  # Shared tool instances
-        self.agent = None  # ChatAgent with workflow tool
         self.token_validator: Optional[TokenValidator] = None  # Validates frontend tokens
         self.obo_provider: Optional[OBOTokenProvider] = None  # Exchanges tokens for Power BI
         self.auth_config: Optional[AuthConfig] = None  # Config for frontend MSAL.js
@@ -202,12 +204,8 @@ class AppState:
         """Refresh the workflow with new token from frontend."""
         logger.info("Refreshing workflow...")
         
-        # Recreate workflow and agent
+        # Recreate workflow and shared instances
         self.workflow, self.shared_instances = create_dax_workflow(pre_connect_powerbi=True)
-        self.agent = create_dax_agent(
-            workflow=self.workflow,
-            shared_instances=self.shared_instances
-        )
         
         logger.info("[OK] Workflow refreshed")
 
@@ -288,13 +286,7 @@ async def startup_event():
         logger.info("Using Power BI REST API (no XMLA connection needed)")
         app_state.workflow, app_state.shared_instances = create_dax_workflow(pre_connect_powerbi=False)
         
-        # Create agent with workflow tool
-        app_state.agent = create_dax_agent(
-            workflow=app_state.workflow,
-            shared_instances=app_state.shared_instances
-        )
-        
-        logger.info("[OK] Workflow and Agent initialized")
+        logger.info("[OK] Workflow and shared instances initialized")
         
         # Mark as initialized
         app_state.initialized = True
@@ -567,15 +559,15 @@ def process_query(
         )
     
     try:
-        logger.info(f"Processing query through development workflow: {request.question}")
+        logger.info(f"Processing query through LLM Planner pipeline: {request.question}")
         
-        # Process through workflow using run_workflow_sync
-        # Pass the Power BI token (from OBO) for REST API calls
-        result = run_workflow_sync(
+        # Process through LLM Planner → Analyst → Format pipeline
+        result = run_pipeline_sync(
+            shared=app_state.shared_instances,
             workflow=app_state.workflow,
             user_query=request.question,
+            access_token=powerbi_token,  # Pass OBO-acquired Power BI token
             timeout=120,
-            access_token=powerbi_token  # Pass OBO-acquired Power BI token
         )
         
         # Handle token expiration errors
@@ -621,6 +613,7 @@ def process_query(
             requires_reauth=requires_reauth,
             dax_generation_ttft=result.get("dax_generation_ttft"),
             dax_generation_ttlt=result.get("dax_generation_ttlt"),
+            timing=result.get("timing"),
         )
     
     except Exception as e:

@@ -25,38 +25,7 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from schema_extraction.format_schema_for_prompt import SchemaPackFormatter
-
-
-# ============================================================
-# Domain definitions
-# ============================================================
-
-DOMAIN_CONFIGS: List[Dict[str, Any]] = [
-    {
-        "name": "transactions",
-        "label": "TRANSACTIONS SCHEMA",
-        "description": (
-            "This schema contains only tables, relationships, and measures\n"
-            "related to FactTransactions (TAMM platform transactions)."
-        ),
-        "fact_tables": ["facttransactions"],
-        "extra_tables": [],              # additional tables to always include
-        "measure_folders": ["Transactions"],
-        "output_prefix": "schema_transactions",
-    },
-    {
-        "name": "feedback",
-        "label": "FEEDBACK SCHEMA",
-        "description": (
-            "This schema contains only tables, relationships, and measures\n"
-            "related to FactADFeedback (customer feedback / surveys)."
-        ),
-        "fact_tables": ["factadfeedback"],
-        "extra_tables": ["tempdata"],     # user requested tempdata in feedback
-        "measure_folders": ["Feedback"],
-        "output_prefix": "schema_feedback",
-    },
-]
+from schema_extraction.domain_configs import DOMAIN_CONFIGS
 
 
 # ============================================================

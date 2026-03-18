@@ -119,28 +119,33 @@ class DAXWorkflowState:
         }
 
 
-# Global state instance
-_workflow_state: Optional[DAXWorkflowState] = None
+# Thread-local state — each thread gets its own DAXWorkflowState.
+# This is critical for parallel cross-domain execution where two analyst
+# workflows run concurrently in separate threads.
+import threading
+
+_thread_local = threading.local()
 
 
 def get_workflow_state() -> DAXWorkflowState:
-    """Get the current workflow state."""
-    global _workflow_state
-    if _workflow_state is None:
-        _workflow_state = DAXWorkflowState()
-    return _workflow_state
+    """Get the current thread's workflow state."""
+    state = getattr(_thread_local, "workflow_state", None)
+    if state is None:
+        state = DAXWorkflowState()
+        _thread_local.workflow_state = state
+    return state
 
 
 def set_workflow_state(state: DAXWorkflowState) -> None:
-    """Set the workflow state."""
-    global _workflow_state
-    _workflow_state = state
+    """Set the workflow state for the current thread."""
+    _thread_local.workflow_state = state
 
 
 def reset_workflow_state() -> DAXWorkflowState:
-    """Reset the workflow state for a new query."""
-    global _workflow_state
+    """Reset the workflow state for a new query (current thread only)."""
+    old_state = getattr(_thread_local, "workflow_state", None)
     # Preserve conversation history
-    history = _workflow_state.conversation_history if _workflow_state else []
-    _workflow_state = DAXWorkflowState(conversation_history=history)
-    return _workflow_state
+    history = old_state.conversation_history if old_state else []
+    new_state = DAXWorkflowState(conversation_history=history)
+    _thread_local.workflow_state = new_state
+    return new_state

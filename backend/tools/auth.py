@@ -604,7 +604,13 @@ def _create_azure_service(service_id: str):
 
 
 def _create_compass_service(service_id: str):
-    """Create Core42 Compass chat service via OpenAI-compatible API."""
+    """Create Core42 Compass chat service via OpenAI-compatible API.
+    
+    Reuses a module-level AsyncOpenAI client so that all services
+    (planner, generator, validator, formatter) share one HTTP
+    connection pool — avoids per-tool TCP/TLS cold-starts and
+    reduces 429 retries from parallel connection setup.
+    """
     from openai import AsyncOpenAI
     from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
     from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.open_ai_prompt_execution_settings import (
@@ -614,16 +620,34 @@ def _create_compass_service(service_id: str):
     config = CompassConfig()
     config.validate()
     
-    # Create AsyncOpenAI client with custom base URL
-    async_client = AsyncOpenAI(
-        api_key=config.api_key,
-        base_url=config.base_url,
-    )
+    # Shared AsyncOpenAI client (module-level singleton)
+    global _shared_compass_client
+    if _shared_compass_client is None:
+        import httpx
+        _shared_compass_client = AsyncOpenAI(
+            api_key=config.api_key,
+            base_url=config.base_url,
+            max_retries=2,
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            http_client=httpx.AsyncClient(
+                limits=httpx.Limits(
+                    max_connections=20,
+                    max_keepalive_connections=10,
+                    keepalive_expiry=120,
+                ),
+                timeout=httpx.Timeout(60.0, connect=10.0),
+            ),
+        )
+        print(f"[PERF] Shared Compass HTTP client created (pool=20, keepalive=10)")
     
     chat_service = OpenAIChatCompletion(
         ai_model_id=config.model,
-        async_client=async_client,
+        async_client=_shared_compass_client,
         service_id=service_id,
     )
     
     return chat_service, OpenAIChatPromptExecutionSettings, "compass"
+
+
+# Module-level singleton for the shared AsyncOpenAI client
+_shared_compass_client = None

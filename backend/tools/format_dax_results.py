@@ -40,8 +40,9 @@ logger = logging.getLogger(__name__)
 # Performance Constants
 # ============================================================
 MAX_ROWS_TO_SEND = 15  # Truncate data before sending to LLM
-SIMPLE_RESULT_THRESHOLD = 3  # Use programmatic formatting for <= this many rows
+SIMPLE_RESULT_THRESHOLD = 50  # Use fast programmatic formatting for <= this many rows
 MAX_COMPLETION_TOKENS = 700  # Reduced from 1000 - output is structured
+MAX_TABLE_DISPLAY_ROWS = 25  # Max rows to show in the markdown table
 
 
 # ============================================================
@@ -139,6 +140,11 @@ class DAXResultsFormatter:
             columns = results.get("columns", [])
             data = results.get("data", [])
             row_count = results.get("row_count", len(data))
+
+            # Cross-domain: multiple result sets described as markdown sections
+            cross_domain_text = results.get("_cross_domain_text")
+            if cross_domain_text:
+                return self._format_cross_domain(user_query, dax_query, cross_domain_text, row_count)
             
             # Optimization: Use programmatic formatting for simple results (1-3 rows)
             if row_count <= SIMPLE_RESULT_THRESHOLD:
@@ -205,6 +211,44 @@ Format with: ### Answer, ### Results (table), ### Explanation (bullets). Do NOT 
             return json.dumps(results, default=str)
         else:
             return json.dumps({"raw": str(results)}, default=str)
+
+    def _format_cross_domain(
+        self,
+        user_query: str,
+        dax_query: str,
+        cross_domain_text: str,
+        total_rows: int,
+    ) -> FormattedResult:
+        """
+        Format cross-domain results where each domain's data is presented
+        as a separate markdown section.  Uses the LLM to produce one
+        unified answer that covers all domains.
+        """
+        try:
+            self._ensure_initialized()
+            self._chat_history = ChatHistory(system_message=ANSWER_FORMATTER_PROMPT)
+
+            prompt = f"""Question: {user_query}
+
+This question required data from multiple domains.  Here are the results from each domain:
+
+{cross_domain_text}
+
+Combine ALL results into one unified answer.
+Format with: ### Answer (natural-language summary of ALL results), ### Results (one table per domain — keep them separate), ### Explanation (bullets).
+Do NOT include DAX query. Do NOT omit any domain's results."""
+
+            self._chat_history.add_user_message(prompt)
+            formatted_answer = self._run_async(self._get_response_async())
+
+            return FormattedResult(
+                success=True,
+                formatted=formatted_answer,
+                summary=self._extract_summary(formatted_answer),
+            )
+        except Exception as e:
+            logger.error(f"Cross-domain format error: {e}")
+            return FormattedResult(success=False, error=str(e))
     
     def _format_simple_result(
         self,
@@ -215,41 +259,57 @@ Format with: ### Answer, ### Results (table), ### Explanation (bullets). Do NOT 
         row_count: int,
     ) -> str:
         """
-        Format simple results (1-3 rows) programmatically without LLM.
-        This saves ~4-5 seconds per call for simple queries.
+        Format results programmatically without an LLM call.
+        Handles 0 to ~50 rows.  Saves 3-5 seconds per query.
         """
-        # Build answer based on data
+        # -- Natural-language answer --
         if row_count == 0:
             answer = "The query returned no data."
             table = "No data returned."
         else:
-            # Generate natural language answer from first row
+            clean = lambda c: str(c).replace('[', '').replace(']', '').replace('_', ' ')
+
             if row_count == 1 and len(columns) == 1:
-                # Single value result
-                value = data[0][0]
-                col_name = columns[0].replace('[', '').replace(']', '').replace('_', ' ')
-                answer = f"The {col_name} is {value}."
+                # Single scalar
+                answer = f"The {clean(columns[0])} is **{data[0][0]}**."
             elif row_count == 1:
-                # Single row with multiple columns
-                parts = [f"{columns[i].replace('[', '').replace(']', '')}: {data[0][i]}" for i in range(min(3, len(columns)))]
+                # Single row, multiple columns
+                parts = [f"**{clean(columns[i])}**: {data[0][i]}" for i in range(len(columns))]
                 answer = "The result shows " + ", ".join(parts) + "."
+            elif row_count <= 5 and len(columns) <= 3:
+                # Small result — mention first+last and range
+                metric_col = columns[-1]  # usually the value column
+                first_val = data[0][-1]
+                last_val = data[-1][-1]
+                label_col = columns[0] if len(columns) > 1 else None
+                first_label = data[0][0] if label_col else "first"
+                last_label = data[-1][0] if label_col else "last"
+                answer = (
+                    f"The query returned {row_count} results. "
+                    f"{clean(metric_col)} ranges from **{first_val}** "
+                    f"({first_label}) to **{last_val}** ({last_label})."
+                )
             else:
-                # Multiple rows (2-3)
-                answer = f"The query returned {row_count} results."
-            
-            # Build markdown table
+                # Larger tabular result
+                answer = f"The query returned **{row_count}** results across {len(columns)} columns."
+
+            # -- Markdown table (cap display rows) --
+            show_data = data[:MAX_TABLE_DISPLAY_ROWS]
             header = "| " + " | ".join(str(c) for c in columns) + " |"
             separator = "|" + "|".join("---" for _ in columns) + "|"
-            rows = []
-            for row in data:
-                row_str = "| " + " | ".join(str(v) if v is not None else "" for v in row) + " |"
-                rows.append(row_str)
-            table = "\n".join([header, separator] + rows)
-        
-        # Build explanation
+            rows_md = []
+            for row in show_data:
+                row_str = "| " + " | ".join(
+                    str(v) if v is not None else "" for v in row
+                ) + " |"
+                rows_md.append(row_str)
+            table = "\n".join([header, separator] + rows_md)
+            if row_count > MAX_TABLE_DISPLAY_ROWS:
+                table += f"\n\n*...showing {MAX_TABLE_DISPLAY_ROWS} of {row_count} rows*"
+
+        # -- Explanation bullets --
         explanation = f"- Query returned {row_count} row(s)."
-        
-        # Format the complete response (DAX shown separately in UI toggle)
+
         formatted = f"""### Answer:
 
 {answer}
