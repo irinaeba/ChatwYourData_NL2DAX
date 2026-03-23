@@ -2,12 +2,14 @@
 Prompts Module
 
 This package contains all system prompts used by the DAX generation tools.
+
+Subpackages:
+- prompt_generator: DAX generation prompts (transactions, feedback)
+- prompt_validator: DAX validation prompts (transactions, feedback)
 """
 
-from .dax_generator_prompt_transactions import DAX_GENERATOR_PROMPT_TRANSACTIONS
-from .dax_generator_prompt_feedback import DAX_GENERATOR_PROMPT_FEEDBACK
-from .dax_validator_prompt_transactions import DAX_VALIDATOR_PROMPT_TRANSACTIONS
-from .dax_validator_prompt_feedback import DAX_VALIDATOR_PROMPT_FEEDBACK
+from .prompt_generator import DAX_GENERATOR_PROMPT_TRANSACTIONS, DAX_GENERATOR_PROMPT_FEEDBACK
+from .prompt_validator import DAX_VALIDATOR_PROMPT_TRANSACTIONS, DAX_VALIDATOR_PROMPT_FEEDBACK
 from .answer_formatter_prompt import ANSWER_FORMATTER_PROMPT
 
 __all__ = [
