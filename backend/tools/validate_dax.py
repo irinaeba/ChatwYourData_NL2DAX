@@ -58,7 +58,7 @@ def get_dax_validator_prompt(intent: str) -> str:
                var  = DAX_VALIDATOR_PROMPT_{DOMAIN}
     """
     domain = intent.strip().lower()
-    filepath = _project_root / "backend" / "prompts" / f"dax_validator_prompt_{domain}.py"
+    filepath = _project_root / "backend" / "prompts" / "prompt_validator" / f"dax_validator_prompt_{domain}.py"
     variable = f"DAX_VALIDATOR_PROMPT_{domain.upper()}"
     if not filepath.exists():
         raise FileNotFoundError(

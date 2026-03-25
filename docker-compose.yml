@@ -1,0 +1,31 @@
+# ============================================================
+# NLtoDAX — Docker Compose
+# ============================================================
+# Usage:
+#   docker compose up --build        (foreground)
+#   docker compose up --build -d     (detached)
+#   docker compose down              (stop & remove)
+#
+# Requires a .env file in the project root (see env.template).
+# ============================================================
+
+services:
+  nltodax:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nltodax-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persist / update cached schema files without rebuild
+      - ./cache:/app/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3

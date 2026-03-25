@@ -1,0 +1,76 @@
+# =============================================
+# Docker build context exclusions
+# =============================================
+
+# Git
+.git/
+.gitignore
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+wheels/
+*.so
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# MSAL token caches
+.msal_cache.bin
+.msal_token_cache.bin
+*.msal_cache*
+*.msal_token_cache*
+
+# Docker files (don't send themselves into build context)
+Dockerfile
+docker-compose.yml
+
+# Files not needed at runtime
+docs/
+lib/
+xmla-worker/
+node_modules/
+toremove/
+run_app.bat
+run_devui.py
+readme.md
+*.md

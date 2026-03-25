@@ -75,7 +75,7 @@ def get_dax_generator_prompt(intent: str) -> str:
                var  = DAX_GENERATOR_PROMPT_{DOMAIN}
     """
     domain = intent.strip().lower()
-    filepath = _project_root / "backend" / "prompts" / f"dax_generator_prompt_{domain}.py"
+    filepath = _project_root / "backend" / "prompts" / "prompt_generator" / f"dax_generator_prompt_{domain}.py"
     variable = f"DAX_GENERATOR_PROMPT_{domain.upper()}"
     if not filepath.exists():
         raise FileNotFoundError(
