@@ -336,21 +336,84 @@ The application will be available at `http://localhost:8000`
 
 ---
 
-## 📁 Project Structure
+## � Running with Docker (Recommended)
+
+Docker is the easiest way to get the application running — no Python, no virtual environment, no dependency installation required.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+
+### Quick Start
+
+```bash
+# 1. Clone the repo and switch to the dev_local branch
+git clone https://github.com/irinaeba/NLtoDAX_POC.git
+cd NLtoDAX_POC
+git checkout dev_local
+
+# 2. Create your .env file from the template
+cp env.template .env
+# Edit .env and fill in your values (see Step 4 above for reference)
+
+# 3. Build and start the container
+docker compose up --build -d
+
+# 4. Verify the container is healthy (~40s for first startup)
+docker ps                                # STATUS should show "(healthy)"
+curl http://localhost:8000/health         # Returns {"status":"healthy",...}
+
+# 5. Open the UI
+# Browse to http://localhost:8000
+```
+
+### Common Docker Commands
+
+```bash
+# View logs
+docker logs nltodax-app -f
+
+# Stop the container
+docker compose down
+
+# Rebuild after pulling new code changes
+git pull
+docker compose up --build -d
+
+# Restart the container
+docker compose restart
+```
+
+### Notes
+
+- The `.env` file is **never** baked into the image — it is loaded at runtime via `env_file`
+- The `cache/` directory is mounted as a volume so schema files persist across rebuilds
+- The container exposes port **8000** (same as local development)
+- A built-in healthcheck pings `/health` every 30 seconds
+
+---
+
+## �📁 Project Structure
 
 ```
 NLtoDAX/
 ├── app.py                 # Main FastAPI application
+├── Dockerfile             # Multi-stage Docker build
+├── docker-compose.yml     # Docker Compose orchestration
+├── env.template           # Environment variables template
+├── requirements.txt
 ├── backend/
 │   ├── executors/         # Workflow executors
-│   ├── prompts/           # LLM prompts for DAX generation/validation
+│   ├── prompts/
+│   │   ├── prompt_generator/  # DAX generation prompts (per domain)
+│   │   └── prompt_validator/  # DAX validation prompts (per domain)
 │   ├── tools/             # Core tools (auth, DAX execution, chart viz)
-│   └── evaluations/       # Evaluation scripts and results
+│   └── evaluations/       # Evaluation scripts and ground truth
 ├── frontend/              # Chat UI (HTML/CSS/JS)
 ├── cache/
 │   └── schema/            # Cached semantic model schemas
-├── lib/                   # ADOMD.NET DLL
-└── requirements.txt
+├── schema_extraction/     # Schema extraction utilities
+└── lib/                   # ADOMD.NET DLL (local dev only)
 ```
 
 ---
