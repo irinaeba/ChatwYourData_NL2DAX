@@ -294,6 +294,18 @@
             .sample-buttons { flex-direction: row; flex-wrap: wrap; }
             .sample-btn { flex: 1; min-width: 140px; text-align: center; }
         }
+
+        /* Clarification chips */
+        .clarification-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .clarification-chip {
+            display: inline-block; padding: 8px 16px;
+            background: rgba(0, 163, 224, 0.08); border: 1.5px solid #00A3E0;
+            border-radius: 20px; color: #0088B8; font-size: 13px; font-weight: 500;
+            cursor: pointer; transition: all 0.2s ease; text-align: left; line-height: 1.4;
+        }
+        .clarification-chip:hover { background: #00A3E0; color: #fff; }
+        .clarification-chip.chip-selected { background: #00A3E0; color: #fff; border-color: #0088B8; cursor: default; }
+        .clarification-chip.chip-disabled { opacity: 0.45; cursor: default; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -487,6 +499,36 @@
                 botContent.className = 'bot-content';
                 
                 if (data.success) {
+                    // Check if clarification is needed BEFORE rendering normal results
+                    if (data.clarification_needed && data.clarification_suggestions) {
+                        const clarMsg = data.clarification_message || 'Could you clarify your question?';
+                        const clarP = document.createElement('p');
+                        clarP.textContent = clarMsg;
+                        clarP.style.marginBottom = '12px';
+                        botContent.appendChild(clarP);
+
+                        const chipsDiv = document.createElement('div');
+                        chipsDiv.className = 'clarification-chips';
+                        data.clarification_suggestions.forEach(suggestion => {
+                            const chip = document.createElement('button');
+                            chip.className = 'clarification-chip';
+                            chip.textContent = suggestion;
+                            chip.addEventListener('click', () => {
+                                // Disable all chips after click
+                                chipsDiv.querySelectorAll('.clarification-chip').forEach(c => {
+                                    c.disabled = true;
+                                    c.classList.add('chip-disabled');
+                                });
+                                chip.classList.add('chip-selected');
+                                chip.classList.remove('chip-disabled');
+                                // Submit the selected suggestion
+                                document.getElementById('question').value = suggestion;
+                                sendQuestion();
+                            });
+                            chipsDiv.appendChild(chip);
+                        });
+                        botContent.appendChild(chipsDiv);
+                    } else {
                     // Add chart container if chart_config exists
                     if (data.chart_config && data.chart_type !== 'none') {
                         const chartContainer = document.createElement('div');
@@ -540,6 +582,7 @@
                         `;
                         botContent.appendChild(daxToggle);
                     }
+                    } // end of else (normal success rendering, not clarification)
                 } else {
                     botContent.innerHTML = '❌ Error: ' + escapeHtml(data.error || 'Unknown error');
                 }

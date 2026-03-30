@@ -34,6 +34,7 @@ from semantic_kernel.contents.chat_history import ChatHistory
 from backend.tools.auth import create_chat_service, get_llm_provider
 from backend.prompts.domain_registry import DOMAIN_REGISTRY
 from backend.prompts.query_planner_prompt import build_planner_prompt
+from backend.executors.workflow_state import ConversationTurn
 
 # Suppress httpx noise
 warnings.filterwarnings("ignore", message=".*Event loop is closed.*")
@@ -69,6 +70,11 @@ class ExecutionPlan:
     planner_elapsed: float = 0.0
     raw_response: Optional[str] = None
     error: Optional[str] = None
+    
+    # Clarification support
+    clarification_needed: bool = False
+    clarification_message: Optional[str] = None
+    clarification_suggestions: List[str] = field(default_factory=list)
 
     @property
     def is_cross_domain(self) -> bool:
@@ -84,12 +90,17 @@ class ExecutionPlan:
         return list(dict.fromkeys(s.domain for s in self.steps))  # preserve order, deduplicate
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "steps": [s.to_dict() for s in self.steps],
             "is_cross_domain": self.is_cross_domain,
             "has_dependencies": self.has_dependencies,
             "planner_elapsed": self.planner_elapsed,
         }
+        if self.clarification_needed:
+            d["clarification_needed"] = True
+            d["clarification_message"] = self.clarification_message
+            d["clarification_suggestions"] = self.clarification_suggestions
+        return d
 
 
 # ── Shared LLM service (singleton) ───────────────────────────
@@ -128,12 +139,28 @@ class QueryPlanner:
         self.kernel.add_service(self._chat_service)
         print(f"[OK] Query Planner initialized (provider: {self._provider_name})")
 
-    async def _plan_async(self, user_query: str) -> ExecutionPlan:
+    async def _plan_async(self, user_query: str, conversation_history: List[ConversationTurn] = None) -> ExecutionPlan:
         """Async implementation of the planner LLM call."""
         t0 = time.time()
 
         chat_history = ChatHistory(system_message=self._system_prompt)
-        chat_history.add_user_message(user_query)
+
+        # Build the user message with conversation context for follow-ups
+        user_message = user_query
+        if conversation_history:
+            context_parts = []
+            for turn in conversation_history[-5:]:
+                context_parts.append(turn.to_context_string())
+            if context_parts:
+                context_block = "\n---\n".join(context_parts)
+                user_message = (
+                    f"PREVIOUS CONVERSATION:\n{context_block}\n\n"
+                    f"CURRENT QUESTION (may be a follow-up to the above — resolve references like "
+                    f"'the above Entity', 'this service', 'that', etc. using the conversation context):\n"
+                    f"{user_query}"
+                )
+
+        chat_history.add_user_message(user_message)
 
         # Use low reasoning effort for fast planning
         if self._provider_name == "compass":
@@ -178,6 +205,20 @@ class QueryPlanner:
             logger.warning(f"Planner returned invalid JSON: {e}. Raw: {raw[:500]}")
             return self._fallback_plan(user_query, elapsed, f"Invalid JSON: {e}")
 
+        # Check if the planner returned a clarification request
+        if data.get("clarification_needed"):
+            suggestions = data.get("suggestions", [])
+            message = data.get("message", "Could you clarify your question?")
+            print(f"[PLANNER] Clarification needed: {message}")
+            print(f"[PLANNER]   Suggestions: {suggestions}")
+            return ExecutionPlan(
+                planner_elapsed=elapsed,
+                raw_response=raw,
+                clarification_needed=True,
+                clarification_message=message,
+                clarification_suggestions=suggestions,
+            )
+
         steps_raw = data.get("steps", [])
         if not steps_raw:
             return self._fallback_plan(user_query, elapsed, "Empty steps array")
@@ -218,7 +259,7 @@ class QueryPlanner:
             error=error,
         )
 
-    def plan(self, user_query: str) -> ExecutionPlan:
+    def plan(self, user_query: str, conversation_history: List[ConversationTurn] = None) -> ExecutionPlan:
         """
         Synchronous entry point: plan an execution for the given user query.
 
@@ -229,7 +270,7 @@ class QueryPlanner:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                return loop.run_until_complete(self._plan_async(user_query))
+                return loop.run_until_complete(self._plan_async(user_query, conversation_history))
             finally:
                 loop.close()
 

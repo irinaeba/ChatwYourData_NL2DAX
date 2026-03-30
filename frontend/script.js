@@ -152,7 +152,11 @@ async function submitQuery(question) {
         
         removeLoadingMessage();
         
-        if (data.success) {
+        // Check if clarification is needed
+        if (data.clarification_needed && data.clarification_suggestions) {
+            const message = data.clarification_message || 'Could you clarify your question?';
+            addClarificationMessage(message, data.clarification_suggestions);
+        } else if (data.success) {
             let responseText = data.formatted_answer || 'No answer available';
             
             // Add metadata
@@ -363,6 +367,80 @@ function askSampleQuestion(question) {
         // Trigger submit
         setTimeout(handleSubmitQuery, 100);
     }
+}
+
+// ============================================================
+// Clarification Chips
+// ============================================================
+
+function addClarificationMessage(message, suggestions) {
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.textContent = '🤖';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    
+    // Clarification text
+    const textP = document.createElement('p');
+    textP.textContent = message;
+    textP.style.marginBottom = '12px';
+    bubble.appendChild(textP);
+    
+    // Suggestion chips container
+    const chipsContainer = document.createElement('div');
+    chipsContainer.className = 'clarification-chips';
+    
+    suggestions.forEach(suggestion => {
+        const chip = document.createElement('button');
+        chip.className = 'clarification-chip';
+        chip.textContent = suggestion;
+        chip.addEventListener('click', () => {
+            // Disable all chips after one is clicked
+            const allChips = chipsContainer.querySelectorAll('.clarification-chip');
+            allChips.forEach(c => {
+                c.disabled = true;
+                c.classList.add('chip-disabled');
+            });
+            chip.classList.add('chip-selected');
+            chip.classList.remove('chip-disabled');
+            
+            // Submit the selected suggestion as a new question
+            const input = document.getElementById('question-input');
+            if (input) {
+                input.value = suggestion;
+                setTimeout(handleSubmitQuery, 100);
+            }
+        });
+        chipsContainer.appendChild(chip);
+    });
+    
+    bubble.appendChild(chipsContainer);
+    
+    const meta = document.createElement('div');
+    meta.className = 'message-meta';
+    meta.textContent = new Date().toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    
+    contentDiv.appendChild(bubble);
+    contentDiv.appendChild(meta);
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 // ============================================================

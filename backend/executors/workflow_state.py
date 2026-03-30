@@ -17,12 +17,15 @@ class ConversationTurn:
     user_query: str
     dax_query: Optional[str] = None
     intent: Optional[str] = None
+    result_summary: Optional[str] = None
     
     def to_context_string(self) -> str:
         """Convert to context string for LLM prompt."""
         parts = [f"User: {self.user_query}"]
         if self.dax_query:
             parts.append(f"DAX: {self.dax_query}")
+        if self.result_summary:
+            parts.append(f"Result: {self.result_summary}")
         if self.intent:
             parts.append(f"Intent: {self.intent}")
         return "\n".join(parts)

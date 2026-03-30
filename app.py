@@ -132,6 +132,18 @@ class QueryResponse(BaseModel):
         default=None,
         description="Structured pipeline timing breakdown"
     )
+    clarification_needed: bool = Field(
+        default=False,
+        description="True if the question is ambiguous and needs clarification"
+    )
+    clarification_message: Optional[str] = Field(
+        default=None,
+        description="Message explaining what is ambiguous"
+    )
+    clarification_suggestions: Optional[list] = Field(
+        default=None,
+        description="List of suggested rephrased questions the user can click"
+    )
 
 
 class HealthResponse(BaseModel):
@@ -599,6 +611,9 @@ def process_query(
         # Check if re-authentication is required
         requires_reauth = result.get("requires_reauth", False)
         
+        # Check if clarification is needed
+        clarification_needed = result.get("clarification_needed", False)
+        
         return QueryResponse(
             success=result.get("success", False),
             question=request.question,
@@ -614,6 +629,9 @@ def process_query(
             dax_generation_ttft=result.get("dax_generation_ttft"),
             dax_generation_ttlt=result.get("dax_generation_ttlt"),
             timing=result.get("timing"),
+            clarification_needed=clarification_needed,
+            clarification_message=result.get("clarification_message"),
+            clarification_suggestions=result.get("clarification_suggestions"),
         )
     
     except Exception as e:

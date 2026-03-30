@@ -93,12 +93,15 @@ class ConversationTurn:
     user_query: str
     dax_query: Optional[str] = None
     intent: Optional[str] = None
+    result_summary: Optional[str] = None
     
     def to_context_string(self) -> str:
         """Format this turn for context in the prompt."""
         result = f"User: {self.user_query}"
         if self.dax_query:
             result += f"\nGenerated DAX: {self.dax_query}"
+        if self.result_summary:
+            result += f"\nResult: {self.result_summary}"
         if self.intent:
             result += f"\nIntent: {self.intent}"
         return result

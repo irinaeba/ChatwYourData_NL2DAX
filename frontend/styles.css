@@ -1919,3 +1919,47 @@ body {
         gap: 10px;
     }
 }
+
+/* ============================================================
+   Clarification Chips
+   ============================================================ */
+
+.clarification-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.clarification-chip {
+    display: inline-block;
+    padding: 8px 16px;
+    background: var(--tamm-light-bg);
+    border: 1.5px solid var(--tamm-primary);
+    border-radius: 20px;
+    color: var(--tamm-primary-dark);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    line-height: 1.4;
+}
+
+.clarification-chip:hover {
+    background: var(--tamm-primary);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.clarification-chip.chip-selected {
+    background: var(--tamm-primary);
+    color: #fff;
+    border-color: var(--tamm-primary-dark);
+    cursor: default;
+}
+
+.clarification-chip.chip-disabled {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+}

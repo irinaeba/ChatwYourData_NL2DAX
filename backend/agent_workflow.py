@@ -71,6 +71,7 @@ from backend.executors.workflow_state import (
     set_workflow_state,
     reset_workflow_state,
     DAXWorkflowState,
+    ConversationTurn,
 )
 
 # Import tools for shared instances
@@ -149,6 +150,7 @@ def create_dax_workflow(pre_connect_powerbi: bool = True):
         "results_formatter": get_formatter(),
         "chart_visualizer": get_visualizer(),
         "dax_executor": get_executor(),
+        "conversation_history": [],  # Persistent across requests for follow-up context
     }
 
     # Eagerly initialize the formatter's LLM connection so the first query
@@ -257,6 +259,7 @@ async def run_analyst_workflow(
     intent: str,
     schema_content: str,
     access_token: str = None,
+    conversation_history: List[ConversationTurn] = None,
 ) -> Dict[str, Any]:
     """
     Run the 3-step analyst workflow for a query.
@@ -274,6 +277,10 @@ async def run_analyst_workflow(
     state.intent = intent
     state.schema_content = schema_content
     state.steps_completed.append("extract_intent")  # Done by router
+
+    # Inject conversation history so GenerateDAXExecutor can use it
+    if conversation_history:
+        state.conversation_history = conversation_history
 
     print(f"\n{'='*70}")
     print(f"[ANALYST WORKFLOW] domain={intent}")
@@ -333,6 +340,7 @@ def run_analyst_workflow_sync(
     intent: str,
     schema_content: str,
     access_token: str = None,
+    conversation_history: List[ConversationTurn] = None,
     timeout: int = 120,
 ) -> Dict[str, Any]:
     """Run the analyst workflow synchronously in a separate thread."""
@@ -341,7 +349,7 @@ def run_analyst_workflow_sync(
         asyncio.set_event_loop(loop)
         try:
             return loop.run_until_complete(
-                run_analyst_workflow(workflow, user_query, intent, schema_content, access_token)
+                run_analyst_workflow(workflow, user_query, intent, schema_content, access_token, conversation_history)
             )
         finally:
             loop.close()
@@ -416,14 +424,18 @@ async def _run_pipeline_async(
         "access_token": access_token,
     }
 
+    # Retrieve persistent conversation history from shared dict
+    conversation_history: List[ConversationTurn] = shared.get("conversation_history", [])
+
     print(f"\n{'='*70}")
     print(f"[PIPELINE] Processing query")
     print(f"   Query: {user_query}")
+    print(f"   Conversation history: {len(conversation_history)} prior turn(s)")
     print(f"{'='*70}")
 
     # -- Step 1: LLM Query Planner ----------------------------
     planner = shared["query_planner"]
-    plan = planner.plan(user_query)
+    plan = planner.plan(user_query, conversation_history=conversation_history)
     timing.record_planner(plan)
 
     print(f"[PIPELINE] Plan: {len(plan.steps)} step(s), "
@@ -436,6 +448,25 @@ async def _run_pipeline_async(
 
     if plan.error:
         print(f"[PIPELINE] Planner warning: {plan.error}")
+
+    # -- Check for clarification request -----------------------
+    if plan.clarification_needed:
+        print(f"[PIPELINE] Clarification needed — returning suggestions to user")
+        timing.finish()
+        return {
+            "success": True,
+            "clarification_needed": True,
+            "clarification_message": plan.clarification_message,
+            "clarification_suggestions": plan.clarification_suggestions,
+            "formatted_answer": None,
+            "chart_config": None,
+            "chart_type": "none",
+            "steps_completed": ["planner"],
+            "row_count": 0,
+            "dax_query": None,
+            "elapsed_time": timing.total_elapsed,
+            "timing": timing.to_dict(),
+        }
 
     # -- Step 2: Execute plan steps sequentially ---------------
     step_results: Dict[int, dict] = {}
@@ -464,7 +495,7 @@ async def _run_pipeline_async(
         timing.start_step(step.id, step.domain)
         wf = _build_analyst_workflow(shared) if len(plan.steps) > 1 else workflow
         result_json = await asyncio.to_thread(
-            _run_analyst, wf, shared, step_query, step.domain
+            _run_analyst, wf, shared, step_query, step.domain, conversation_history
         )
 
         try:
@@ -556,6 +587,36 @@ async def _run_pipeline_async(
 
     is_cross_domain = len(all_analyst_results) > 1
 
+    # -- Update conversation history for follow-ups -----------
+    if all_success or primary_result.get("success", False):
+        last_dax = last_analyst.get("dax_query") or ""
+        # Build a concise summary of the results for context
+        result_summary_parts = []
+        for ar in all_analyst_results:
+            if ar.get("success") and ar.get("data"):
+                cols = ar.get("columns", [])
+                data = ar.get("data", [])
+                rows_preview = data[:5]  # Keep up to 5 rows
+                for row in rows_preview:
+                    if isinstance(row, (list, tuple)):
+                        result_summary_parts.append(
+                            ", ".join(f"{c}: {v}" for c, v in zip(cols, row))
+                        )
+        result_summary = "; ".join(result_summary_parts[:5])  # Cap at 5 entries
+
+        turn = ConversationTurn(
+            user_query=user_query,
+            dax_query=last_dax,
+            result_summary=result_summary or None,
+            intent=", ".join(ar.get("intent", "") for ar in all_analyst_results),
+        )
+        conversation_history.append(turn)
+        # Keep only last 10 turns to avoid unbounded growth
+        if len(conversation_history) > 10:
+            conversation_history[:] = conversation_history[-10:]
+        shared["conversation_history"] = conversation_history
+        print(f"[PIPELINE] Conversation history updated ({len(conversation_history)} turns)")
+
     print(f"\n{'='*70}")
     print(f"[PIPELINE] Complete in {timing.total_elapsed:.2f}s")
     print(f"   Planner: {timing.planner_elapsed:.2f}s ({timing.planner_steps_count} steps)")
@@ -621,7 +682,7 @@ def run_pipeline_sync(
 # Internal helpers
 # ============================================================
 
-def _run_analyst(workflow, shared: Dict, user_question: str, intent: str) -> str:
+def _run_analyst(workflow, shared: Dict, user_question: str, intent: str, conversation_history: List[ConversationTurn] = None) -> str:
     """Run an analyst workflow and return JSON result string."""
     # Load schema for this domain
     schema_file = DOMAIN_REGISTRY[intent]["schema_file"]
@@ -646,6 +707,7 @@ def _run_analyst(workflow, shared: Dict, user_question: str, intent: str) -> str
         intent=intent,
         schema_content=schema_content,
         access_token=access_token,
+        conversation_history=conversation_history,
         timeout=120,
     )
 
