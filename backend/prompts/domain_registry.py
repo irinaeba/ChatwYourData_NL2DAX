@@ -26,6 +26,10 @@ DOMAIN_REGISTRY: Dict[str, Dict[str, str]] = {
         "description": "Customer feedback: NPS (Net Promoter Score), CES (Customer Effort Score), CSAT (Customer Satisfaction), satisfaction ratings, promoters, detractors, passives, smiley types, survey types",
         "schema_file": "cache/schema/schema_feedback.txt",
     },
+    "cases": {
+      "description": "Contact Center cases, CRM cases, Case Number, Ticket Nmber, Case SLA: responsiveness score, aggregate score, CRM case SLA, Case CSAT: Customer Satisfaction for contact center, CRM",
+      "schema_file": "cache/schema/schema_cases.txt",
+    },
     # To add a new domain:
     # "new_domain": {
     #     "description": "What this domain covers — be specific so the LLM planner can route correctly",

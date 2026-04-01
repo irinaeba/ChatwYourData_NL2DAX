@@ -30,6 +30,7 @@ You have ONE tool: **run_dax_workflow**
 DOMAIN_DESCRIPTIONS = {
     "transactions": "Services, applications, SLA, completion time, status, transactions, processing time, cycle time, ADGE entities.",
     "feedback": "NPS, CES, CSAT, satisfaction, promoters, detractors, passives, customer feedback, survey responses, ratings, scores.",
+    "cases": "total cases, complaint cases, case sla, case csat, contact center cases, case aggregate score, ticket number, case topics",
 }
 
 

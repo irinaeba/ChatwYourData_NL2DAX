@@ -42,6 +42,18 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
         "measure_folders": ["Feedback"],
         "output_prefix": "schema_feedback",
     },
+        {
+        "name": "cases",
+        "label": "CRM CASES SCHEMA",
+        "description": (
+            "This schema contains only tables, relationships, and measures\n"
+            "related to FactCases (TAMM Contact Center CRM Cases)."
+        ),
+        "fact_tables": ["factcases", "factcasesla", "factcasecsat"],
+        "extra_tables": [],              # additional tables to always include
+        "measure_folders": ["Cases"],
+        "output_prefix": "schema_cases",
+    },
     # To add a new domain:
     # {
     #     "name": "new_domain",
