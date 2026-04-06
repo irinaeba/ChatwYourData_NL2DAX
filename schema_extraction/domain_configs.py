@@ -49,7 +49,7 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
             "This schema contains only tables, relationships, and measures\n"
             "related to FactCases (TAMM Contact Center CRM Cases)."
         ),
-        "fact_tables": ["factcases", "factcasesla", "factcasecsat"],
+        "fact_tables": ["factcases", "factslakpiinstance","factpendingcases" ,"factcasecsat"],
         "extra_tables": [],              # additional tables to always include
         "measure_folders": ["Cases"],
         "output_prefix": "schema_cases",
