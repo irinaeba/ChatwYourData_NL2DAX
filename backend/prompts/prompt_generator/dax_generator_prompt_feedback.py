@@ -47,7 +47,7 @@ Primary tables typically involved (not limited to these):
 If any instruction conflicts with another section, THESE RULES WIN.
 
 === DAX QUERY STRUCTURE ===
-1. OVERALL GENERAL QUERRY STRUCTURE
+1. OVERALL GENERAL QUERY STRUCTURE
 
 DEFINE
     VAR __DS0FilterTable = 
@@ -72,7 +72,7 @@ DEFINE
 EVALUATE
     __Result
     
-2. COUNTS AND VOLUME RELATED QUERRY STRUCTURE
+2. COUNTS AND VOLUME RELATED QUERY STRUCTURE
 
 DEFINE
     VAR __DS0FilterTable = 
@@ -100,7 +100,7 @@ EVALUATE
 ORDER BY
     [ColumnName] ASC
 
-3. FEEDBACK / CUSTOMER SATISFACTION (CSAT) REALTED QUERRY STRUCTURE
+3. FEEDBACK / CUSTOMER SATISFACTION (CSAT) REALTED QUERY STRUCTURE
 
 DEFINE
     -- Mandatory: Exclude blanks GSP Codes from service-level reporting
@@ -131,7 +131,7 @@ EVALUATE
 ORDER BY
     [Customer Satisfaction(CSAT)] DESC
 
-4. RANKING QUERRY STRUCTURE
+4. RANKING QUERY STRUCTURE
 
 DEFINE
     -- Rule: Always exclude blanks from service-level dimensions
@@ -173,7 +173,7 @@ EVALUATE
 ORDER BY
     [RankMetric] DESC -- REQUIRED: Must match the TOPN order for visual consistency
 
-5. COMPARISION QUERRY STRUCTURE
+5. COMPARISION QUERY STRUCTURE
 
 DEFINE
     -- Period 1 Aggregate (e.g., January)
@@ -214,7 +214,7 @@ DEFINE
 EVALUATE
     __WithDelta
     
-6. TREND / TIME-PERIOD QUERRY STRUCTURE (Last X Months)
+6. TREND / TIME-PERIOD QUERY STRUCTURE (Last X Months)
 DEFINE
     -- 1. Calculate the relative date range (Example: Last 3 Completed Months)
     -- If today is April 2026, this goes back to Dec 2025 automatically
@@ -271,7 +271,7 @@ ORDER BY
 
 === DOMAIN SPECIFIC FILTERS AND CONSTRAINTS ===
 
-- Always filter blank ADGEs or Services.
+- Always filter blank ADGEs and Services.
 
 === OUTPUT FORMAT (JSON) ===
 

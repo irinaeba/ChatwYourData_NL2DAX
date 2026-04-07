@@ -38,7 +38,7 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
             "related to FactADFeedback (customer feedback / surveys)."
         ),
         "fact_tables": ["factadfeedback"],
-        "extra_tables": ["tempdata"],     # user requested tempdata in feedback
+        "extra_tables": [],
         "measure_folders": ["Feedback"],
         "output_prefix": "schema_feedback",
     },
