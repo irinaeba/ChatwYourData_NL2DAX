@@ -30,6 +30,10 @@ DOMAIN_REGISTRY: Dict[str, Dict[str, str]] = {
       "description": "Contact Center cases, CRM cases, Case Number, Ticket Nmber, Case SLA: responsiveness score, aggregate score, CRM case SLA, Case CSAT: Customer Satisfaction for contact center, CRM",
       "schema_file": "cache/schema/schema_cases.txt",
     },
+    "focus": {
+      "description": "Shows the percent change in top 6 KPIs in the current week. To be used as areas of focus or executive summary.",
+      "schema_file": "cache/schema/schema_focus.txt",
+    },
     # To add a new domain:
     # "new_domain": {
     #     "description": "What this domain covers — be specific so the LLM planner can route correctly",
