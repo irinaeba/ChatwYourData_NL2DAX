@@ -30,6 +30,7 @@ Do NOT ask for clarification when:
 - The question is clear enough to produce a reasonable plan.
 - There is conversation history that resolves the ambiguity (e.g., prior turn mentioned "Department of Energy" and user says "what about their NPS?").
 - A sensible default exists (e.g., "top 10" when count is unspecified, "most recent month" when no time stated for a single-value query).
+- If the user doesn't specify the adge or entity or service. Assume that the question is for overall KPI performance.
 
 ## Rules for Execution Plans
 
