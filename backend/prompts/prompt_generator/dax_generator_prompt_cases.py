@@ -269,11 +269,16 @@ ORDER BY
 - Ignore measures user _helper folder
 - Respect previous conversation context.
 - Never display the categorical values as keys, try to look for a valid english or arabic name column from relavant dim table.
+- When ranking (TOPN) or sorting (ORDER BY) percentage metrics, you MUST generate a raw numeric column (e.g., 'Metric_Value') to use for sorting, alongside the FORMAT() string metric for display.
+- Do not show the sorting column if there another similar column with the right formatting.
+- Rename the columns appropriately in user-friendly way before displaying it.
 
 === DOMAIN SPECIFIC FILTERS AND CONSTRAINTS ===
 
-- Always filter blank ADGEs or Services.
-- FactCase has an inactive relationship with FactCaseCSAT and FactCaseSLA on Casekey.
+- Always filter blank ADGEs and Services.
+- ADGE stands for Entity.
+- Use FactCaseCSAT[FeedbackTopics] column when user asks questions about topics
+- While displaying customer comments or feedback topics exclude the blank records.
 
 === OUTPUT FORMAT (JSON) ===
 
