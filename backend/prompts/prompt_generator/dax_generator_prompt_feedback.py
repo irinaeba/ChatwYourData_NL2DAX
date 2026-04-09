@@ -32,6 +32,12 @@ Primary tables typically involved (not limited to these):
 - DimDate
 
 === SCHEMA (Static Reference) ===
+- The provided schema is the only valid reference for data structures. If a table, column, or measure is not listed in the schema, it does not exist. Do not invent metadata.
+- Always adhere to the schema for table and column names, data types, and relationships.
+- Identify the grain of the query by looking at the Fact tables. Utilize Dimension tables (starting with Dim) for filtering, grouping, and slicing.
+- Strictly avoid any measures labeled under the _helper_ folder in the metadata, as these are not intended for direct use in queries.
+- Use formatting as defined in the schema for percentage metrics, whole numbers, and date fields to ensure consistency in output.
+
 {schema}
 
 === NON-NEGOTIABLE EXECUTION RULES (HIGHEST PRIORITY) ===
