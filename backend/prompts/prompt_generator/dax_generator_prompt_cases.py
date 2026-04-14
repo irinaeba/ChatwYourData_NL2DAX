@@ -54,73 +54,39 @@ Primary tables typically involved (not limited to these):
 8) Always format percentage metrics (e.g., Case CSAT, SLA %) using the FORMAT() function with "0.0%" to ensure the output includes the "%" symbol and 1 decimal place.
 9) Never show more than 3 decimal places.
 10) Always check if any column has matching values before returning blank results. For example, Q1-26 stands for Quarter 1 in 2026.
-
-If any instruction conflicts with another section, THESE RULES WIN.
+11) When a user specifies a quarter in any format (e.g., “Q1”, “Quarter 1”, “quarter1”, “qtr1”), normalize it to its numeric equivalent (Q1 → 1, Q2 → 2, Q3 → 3, Q4 → 4) and apply the filter using DimDate[Quarter] (which contains values 1-4)
+12) In the absence of a specific period, default to the most recent closed period (e.g., if currently in Q2, default to Q1-26)
 
 === DAX QUERY STRUCTURE ===
-1. OVERALL GENERAL QUERY STRUCTURE
 
+1. OVERALL GENERAL QUERY STRUCTURE: Use for "Total cases," "Counts by category," or simple metrics.
 DEFINE
     VAR __DS0FilterTable = 
-        FILTER_EXPRESSION_IF_NEEDED
-        format:
-        FILTER(
-            'TABLENAME',
-            'TABLENAME'[ColumnName] = ColumnVALUE
-        )
+        FILTER(ALL('TableName'[Column]), 'TableName'[Column] == "Value")
 
     VAR __Core =
         SUMMARIZECOLUMNS(
-            GROUPING_COLUMNS_IF_ANY,
+            'Dimension'[Attribute],
             __DS0FilterTable,
-            "Metric1", [Measure1],
-            "Metric2", [Measure2]
+            "Metric Name", [MeasureName]
         )
-
-    VAR __Result =
-        __Core
 
 EVALUATE
-    __Result
-    
-2. COUNTS AND VOLUME RELATED QUERY STRUCTURE
-
-DEFINE
-    VAR __DS0FilterTable = 
-        FILTER_EXPRESSION_IF_NEEDED
-        format:
-        FILTER(
-            'TABLENAME',
-            'TABLENAME'[ColumnName] = ColumnVALUE
-        )
-
-    VAR __Core =
-        SUMMARIZECOLUMNS(
-            GROUPING_COLUMNS_IF_ANY,
-            __DS0FilterTable,
-            "Total Volume", [CRM Total Cases]
-           
-        )
-
-    VAR __Result = 
-        __Core
-
-EVALUATE
-    __Result
-    
+    __Core
 ORDER BY
-    [ColumnName] ASC
+    'Dimension'[Attribute] ASC
+    
 
-3. FEEDBACK / CASE CUSTOMER SATISFACTION (CSAT) REALTED QUERY STRUCTURE
+
+2. FEEDBACK / CASE CUSTOMER SATISFACTION (CSAT) RELATED QUERY STRUCTURE
 
 DEFINE
-    -- Mandatory: Exclude blanks from service-level reporting
     VAR __ServiceFilter = 
         FILTER(
             ALL('DimService'[ServiceNameEn]),
             NOT('DimService'[ServiceNameEn] IN {{ BLANK() }})
         )
-
+        
     VAR __Core =
         SUMMARIZECOLUMNS(
             'DimService'[ServiceNameEn],
@@ -129,136 +95,238 @@ DEFINE
             "Response Count", [Total Number of Case Feedback Responses]
         )
 
-    -- Mandatory: Apply statistical threshold (e.g., minimum 30 responses) after summarization
-    VAR __FilteredByThreshold = 
-        FILTER(
-            __Core,
-            [Response Count] >= 30 
-        )
-
 EVALUATE
-    __FilteredByThreshold
+    __Core
 ORDER BY
-    [Case CSAT] DESC
+    [Response Count] DESC, [Case CSAT] DESC
 
-4. RANKING QUERY STRUCTURE
+4. RANKING QUERY STRUCTURE: Use when user asks for top or bottom services or adges for any KPIs
 
 DEFINE
-    -- Rule: Always exclude blanks from service-level dimensions
     VAR __ServiceFilter = 
         FILTER(
             ALL('DimService'[ServiceNameEn]),
             NOT('DimService'[ServiceNameEn] IN {{ BLANK() }})
         )
-
-    -- Step 1: Summarize data at the required grain
+    VAR __ADGEFilter = 
+        FILTER(
+            ALL('DimADGE'[ADGE Short Name], 'DimADGE'[OnboardedOnTAMM]), 
+            NOT('DimADGE'[ADGE Short Name] IN {{ BLANK() }}) &&
+            'DimADGE'[OnboardedOnTAMM] = True
+        )
+   
+    -- Step 1: Summarize base metrics
     VAR __Core =
         SUMMARIZECOLUMNS(
             'DimService'[ServiceNameEn],
             __ServiceFilter,
-            "RankMetric", [MeasureName1],      -- The metric used for ranking (e.g., Case CSAT)
-            "ThresholdMetric", [MeasureName2]   -- The metric used for volume threshold (e.g., Total Number of Case Feedback Responses)
+            __ADGEFilter,
+            "MetricValue", [MeasureName1],
+            "Volume", [MeasureName2]
         )
 
-    -- Step 2: Apply statistical threshold (e.g., minimum 30 responses)
-    VAR __CoreFiltered = 
-        FILTER(
+    -- Step 2: Calculate Weighted Impact Score
+    VAR __WithImpact = 
+        ADDCOLUMNS(
             __Core,
-            [ThresholdMetric] >= 30 
+            "ImpactScore", [Volume] * [MetricValue]
         )
 
-    -- Step 3: Apply TOPN on the filtered results
-    -- Note: Ensure [RankMetric] matches the sorting in EVALUATE
-    VAR __Result =
-        TOPN(
-            20, 
-            __CoreFiltered, 
-            [RankMetric], 
-            DESC -- Use DESC for "Top X" and ASC for "Bottom X"
-        )
+    -- Step 3: Top 20 based on Impact
+    VAR __Result = TOPN(20, __WithImpact, [ImpactScore], DESC)
 
 EVALUATE
     __Result
-
 ORDER BY
-    [RankMetric] DESC -- REQUIRED: Must match the TOPN order for visual consistency
+    [ImpactScore] DESC
 
-5. COMPARISION QUERY STRUCTURE
+5. PERIOD-OVER-PERIOD COMPARISON
 
 DEFINE
-    -- Period 1 Aggregate (e.g., January)
+
+    VAR __ADGEFilter = 
+        FILTER(
+            ALL('DimADGE'[ADGE Short Name], 'DimADGE'[OnboardedOnTAMM]), 
+            NOT('DimADGE'[ADGE Short Name] IN {{ BLANK() }}) &&
+            'DimADGE'[OnboardedOnTAMM] = True
+        )
+   
+    VAR __ServiceFilter = 
+        FILTER(
+            ALL('DimService'[ServiceNameEn]), 
+            NOT('DimService'[ServiceNameEn] IN {{ BLANK() }})
+        )
+
+    -- Rule: Period 1 (Previous)
     VAR __Period1 =
         SUMMARIZECOLUMNS(
             'DimADGE'[ADGE Short Name],
             FILTER('DimDate', 'DimDate'[Year] = 2026 && 'DimDate'[Month] = 1),
-            "Metric_P1", [Total Complaint Cases]
+            __ADGEFilter,
+            __ServiceFilter,
+            "Metric_P1", [Measure]
         )
 
-    -- Period 2 Aggregate (e.g., February)
+    -- Rule: Period 2 (Current)
     VAR __Period2 =
         SUMMARIZECOLUMNS(
             'DimADGE'[ADGE Short Name],
             FILTER('DimDate', 'DimDate'[Year] = 2026 && 'DimDate'[Month] = 2),
-            "Metric_P2", [Total Complaint Cases]
+            __ADGEFilter,
+            __ServiceFilter,
+            "Metric_P2", [Measure],
+            "Volume_P2", [VolumeMeasure]
         )
 
-    -- Join periods on the business dimension
-    VAR __Joined =
-        NATURALINNERJOIN(__Period1, __Period2)
+    VAR __Joined = NATURALINNERJOIN(__Period1, __Period2)
 
-    -- Exclude incomplete data before calculation
-    VAR __ValidRows =
-        FILTER(
-            __Joined,
-            NOT ISBLANK([Metric_P1]) && NOT ISBLANK([Metric_P2])
-        )
-
-    -- Calculate Delta and Delta %
-    VAR __WithDelta =
+    VAR __Final = 
         ADDCOLUMNS(
-            __ValidRows,
-            "Abs Delta", [Metric_P2] - [Metric_P1],
-            "Percentage Change", DIVIDE([Metric_P2] - [Metric_P1], [Metric_P1])
+            FILTER(__Joined, NOT ISBLANK([Metric_P1]) && NOT ISBLANK([Metric_P2])),
+            "Abs_Delta", [Metric_P2] - [Metric_P1],
+            "Pct_Change", DIVIDE([Metric_P2] - [Metric_P1], [Metric_P1]),
+            "Impact_Score", [Volume_P2] * ([Metric_P2] - [Metric_P1])
         )
 
 EVALUATE
-    __WithDelta
+    TOPN(10, __Final, ABS([Impact_Score]), DESC)
+ORDER BY
+    [Impact_Score] DESC
     
 6. TREND / TIME-PERIOD QUERY STRUCTURE (Last X Months)
+
 DEFINE
-    -- 1. Calculate the relative date range (Example: Last 3 Completed Months)
-    -- If today is April 2026, this goes back to Dec 2025 automatically
+    -- Standard relative date range
     VAR __ReferenceDate = TODAY()
     VAR __StartRange = EOMONTH(__ReferenceDate, -4) + 1 
     VAR __EndRange = EOMONTH(__ReferenceDate, -1)
 
-    -- 2. Create the Date Filter (Using ALL to preserve lineage for grouping)
     VAR __DateFilter = 
         FILTER(
             ALL('DimDate'),
-            'DimDate'[Date] >= __StartRange && 
-            'DimDate'[Date] <= __EndRange
+            'DimDate'[Date] >= __StartRange && 'DimDate'[Date] <= __EndRange
         )
 
-    -- 3. Summarize with Time Dimensions
+    VAR __ADGEFilter = 
+        FILTER(
+            ALL('DimADGE'[ADGE Short Name], 'DimADGE'[OnboardedOnTAMM]), 
+            NOT('DimADGE'[ADGE Short Name] IN {{ BLANK() }}) &&
+            'DimADGE'[OnboardedOnTAMM] = True
+        )
+      
+    VAR __ServiceFilter = 
+        FILTER(
+            ALL('DimService'[ServiceNameEn]), 
+            NOT('DimService'[ServiceNameEn] IN {{ BLANK() }})
+        )
+
     VAR __Core =
         SUMMARIZECOLUMNS(
-            'DimDate'[Year],          -- Keep numeric for sorting
-            'DimDate'[Month],         -- Keep numeric for sorting
+            'DimDate'[Year],
+            'DimDate'[Month],
             'DimDate'[MonthName],
             __DateFilter,
-            -- Apply percentage formatting here
-            "Case CSAT", FORMAT([CRM Case Customer Satisfaction], "0.0%"),
-            "Total Volume", [CRM Total Cases]
+            __ADGEFilter,
+            __ServiceFilter,
+            "Volume", [CRM Total Cases]
         )
 
 EVALUATE
     __Core
-
 ORDER BY
-    'DimDate'[Year] ASC, 
-    'DimDate'[Month] ASC
+    'DimDate'[Year] ASC, 'DimDate'[Month] ASC
+    
+7. ROOT CAUSE & TOPIC IMPACT ANALYSIS: Use to show Topics for Services with most drop in CSAT for a specified period
 
+DEFINE
+    -- 1. Period Definitions
+    VAR __CurrPeriod = FILTER(ALL('DimDate'), 'DimDate'[Year] = 2026 && 'DimDate'[Month] = 3)
+    VAR __PrevPeriod = FILTER(ALL('DimDate'), 'DimDate'[Year] = 2026 && 'DimDate'[Month] = 2)
+
+    -- 2. Separated Dimension Filters
+    VAR __ADGEFilter = 
+        FILTER(
+            ALL('DimADGE'[ADGE Short Name], 'DimADGE'[OnboardedOnTAMM]), 
+            NOT('DimADGE'[ADGE Short Name] IN {{ BLANK() }}) &&
+            'DimADGE'[OnboardedOnTAMM] = True
+        )
+    
+    VAR __ServiceFilter = 
+        FILTER(
+            ALL('DimService'[ServiceNameEn]), 
+            NOT('DimService'[ServiceNameEn] IN {{ BLANK() }})
+        )
+    
+    VAR __TopicFilter = 
+        FILTER(
+            ALL('FactCaseCSAT'[FeedbackTopics]), 
+            NOT('FactCaseCSAT'[FeedbackTopics] IN {{ BLANK() }})
+        )
+
+    -- 3. Step 1: Top 5 Services by Service-Level Drop Impact
+    VAR __Svc_P1 = 
+        SUMMARIZECOLUMNS(
+            'DimService'[ServiceNameEn], 
+            __CurrPeriod, __ADGEFilter, __ServiceFilter, __TopicFilter,
+            "C_CSAT", [CRM Case Customer Satisfaction], 
+            "C_Vol", [Total Number of Case Feedback Responses]
+        )
+    VAR __Svc_P2 = 
+        SUMMARIZECOLUMNS(
+            'DimService'[ServiceNameEn], 
+            __PrevPeriod, __ADGEFilter, __ServiceFilter, __TopicFilter,
+            "P_CSAT", [CRM Case Customer Satisfaction]
+        )
+    
+    VAR __Top5Services = 
+        TOPN(5, 
+            FILTER(NATURALINNERJOIN(__Svc_P1, __Svc_P2), [P_CSAT] > [C_CSAT]), 
+            [C_Vol] * ([P_CSAT] - [C_CSAT]), 
+            DESC
+        )
+
+    -- 4. Step 2: For each top service, find Top 3 "Toxic" Topics
+    VAR __Result = 
+        GENERATE(
+            __Top5Services,
+            VAR __CurrentSvc = 'DimService'[ServiceNameEn]
+            
+            VAR __Topic_P1 = 
+                CALCULATETABLE(
+                    SUMMARIZECOLUMNS(
+                        'FactCaseCSAT'[FeedbackTopics], 
+                        __CurrPeriod, __ADGEFilter, __ServiceFilter, __TopicFilter,
+                        "TC_CSAT", [CRM Case Customer Satisfaction], 
+                        "TC_Vol", [Total Number of Case Feedback Responses]
+                    ), 
+                    'DimService'[ServiceNameEn] = __CurrentSvc
+                )
+            VAR __Topic_P2 = 
+                CALCULATETABLE(
+                    SUMMARIZECOLUMNS(
+                        'FactCaseCSAT'[FeedbackTopics], 
+                        __PrevPeriod, __ADGEFilter, __ServiceFilter, __TopicFilter,
+                        "TP_CSAT", [CRM Case Customer Satisfaction]
+                    ), 
+                    'DimService'[ServiceNameEn] = __CurrentSvc
+                )
+            
+            VAR __TopicImpactTable = 
+                ADDCOLUMNS(
+                    FILTER(NATURALINNERJOIN(__Topic_P1, __Topic_P2), [TP_CSAT] > [TC_CSAT]),
+                    "TopicDropImpact", [TC_Vol] * ([TP_CSAT] - [TC_CSAT]),
+                    "FormattedTopicCSAT", FORMAT([TC_CSAT], "0.0%")
+                )
+            
+            RETURN TOPN(3, __TopicImpactTable, [TopicDropImpact], DESC)
+        )
+
+EVALUATE
+    __Result
+ORDER BY
+    [C_Vol] * ([P_CSAT] - [C_CSAT]) DESC,
+    [TopicDropImpact] DESC
+    
 === DOMAIN SPECIFIC DAX RULES ===
 
 - ALL filters MUST be defined as variables first.
@@ -286,10 +354,9 @@ ORDER BY
 
 - Always filter blank ADGEs and Services.
 - ADGE stands for Entity.
-- The threshold for minimum responses when reporting Case CSAT is 30 responses.
-- Use FactCaseCSAT[FeedbackTopics] column when user asks questions about topics
-- While displaying customer comments or feedback topics exclude the blank records.
+- Use FactCaseCSAT[FeedbackTopics] column when user asks questions about topics or impact analysis
 - Use [Case SLA Aggregate Score] for Case SLA calculations and reporting.
+- When ranking adges or services to calculate the impact give priority to those having higher volume and maximum drop. If possible, sort by a calculated impact measure: [Impact] = [Volume] * ([Metric_P1] - [Metric_P2])
 
 === OUTPUT FORMAT (JSON) ===
 
