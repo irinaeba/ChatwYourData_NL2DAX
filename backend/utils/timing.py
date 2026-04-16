@@ -45,6 +45,13 @@ class PipelineTiming:
     step_domains: Dict[int, str] = field(default_factory=dict)
     step_executor_timings: Dict[int, Dict[str, float]] = field(default_factory=dict)
 
+    # ---- Native function tracking ------------------------------------------
+    step_native_function: Dict[int, Optional[str]] = field(default_factory=dict)
+    step_native_match_time: Dict[int, Optional[float]] = field(default_factory=dict)
+    step_native_params: Dict[int, Optional[Dict[str, Any]]] = field(default_factory=dict)
+    step_native_attempted: Dict[int, bool] = field(default_factory=dict)
+    step_native_matched: Dict[int, bool] = field(default_factory=dict)
+
     # ---- Format / Chart ----------------------------------------------------
     format_elapsed: float = 0.0
 
@@ -66,10 +73,27 @@ class PipelineTiming:
         self._step_starts[step_id] = time.time()
         self.step_domains[step_id] = domain
 
+    def record_native_attempt(
+        self,
+        step_id: int,
+        matched: bool,
+        function_name: Optional[str] = None,
+        match_elapsed: float = 0.0,
+    ) -> None:
+        """Record that a native function match was attempted for this step."""
+        self.step_native_attempted[step_id] = True
+        self.step_native_matched[step_id] = matched
+        self.step_native_match_time[step_id] = match_elapsed
+        if function_name:
+            self.step_native_function[step_id] = function_name
+
     def end_step(
         self,
         step_id: int,
         executor_timings: Optional[Dict[str, float]] = None,
+        native_function: Optional[str] = None,
+        native_match_time: Optional[float] = None,
+        native_params: Optional[Dict[str, Any]] = None,
     ) -> float:
         """Mark the end of a plan-step analyst call. Returns elapsed seconds."""
         start = self._step_starts.pop(step_id, None)
@@ -79,6 +103,10 @@ class PipelineTiming:
         self.step_elapsed[step_id] = elapsed
         if executor_timings:
             self.step_executor_timings[step_id] = executor_timings
+        if native_function:
+            self.step_native_function[step_id] = native_function
+            self.step_native_match_time[step_id] = native_match_time
+            self.step_native_params[step_id] = native_params
         return elapsed
 
     # ---- Formatting --------------------------------------------------------
@@ -105,7 +133,7 @@ class PipelineTiming:
     # ---- Serialisation -----------------------------------------------------
     def to_markdown(self) -> str:
         """Build a human-readable markdown timing block for the chat answer."""
-        lines = ["\n\n---\n**⏱️ Execution Timing:**"]
+        lines = ["\n\n---\n**Execution Timing:**"]
         lines.append(
             f"- LLM Planner: {self.planner_elapsed:.2f}s "
             f"({self.planner_steps_count} step(s))"
@@ -115,9 +143,25 @@ class PipelineTiming:
             domain = self.step_domains.get(step_id, "?")
             elapsed = self.step_elapsed[step_id]
             prefix = f"[{domain}] " if self.is_cross_domain else ""
+            native_fn = self.step_native_function.get(step_id)
+            native_attempted = self.step_native_attempted.get(step_id, False)
+            native_matched = self.step_native_matched.get(step_id, False)
+            match_time = self.step_native_match_time.get(step_id, 0.0)
             executors = self.step_executor_timings.get(step_id, {})
 
-            if executors:
+            if native_matched and native_fn:
+                # Native function was used
+                lines.append(f"- {prefix}Native function ({native_fn}): {elapsed:.2f}s")
+                lines.append(f"  - Matcher: {match_time:.2f}s")
+                exec_time = elapsed - (match_time or 0.0)
+                lines.append(f"  - DAX execution: {max(exec_time, 0):.2f}s")
+            elif native_attempted and not native_matched:
+                # Native match was tried but didn't match — fell through to LLM
+                lines.append(f"- {prefix}Analyst workflow: {elapsed:.2f}s")
+                lines.append(f"  - Native matcher (no match): {match_time:.2f}s")
+                for exec_name, exec_time in executors.items():
+                    lines.append(f"  - {exec_name}: {exec_time:.2f}s")
+            elif executors:
                 lines.append(f"- {prefix}Analyst workflow: {elapsed:.2f}s")
                 for exec_name, exec_time in executors.items():
                     lines.append(f"  - {exec_name}: {exec_time:.2f}s")
@@ -134,7 +178,7 @@ class PipelineTiming:
         """Structured timing dict for the API response."""
         steps: List[Dict[str, Any]] = []
         for step_id in sorted(self.step_elapsed):
-            steps.append({
+            step_entry: Dict[str, Any] = {
                 "step_id": step_id,
                 "domain": self.step_domains.get(step_id),
                 "elapsed_seconds": round(self.step_elapsed[step_id], 3),
@@ -142,7 +186,19 @@ class PipelineTiming:
                     k: round(v, 3)
                     for k, v in self.step_executor_timings.get(step_id, {}).items()
                 },
-            })
+            }
+            native_attempted = self.step_native_attempted.get(step_id, False)
+            native_matched = self.step_native_matched.get(step_id, False)
+            if native_attempted:
+                step_entry["native_attempted"] = True
+                step_entry["native_matched"] = native_matched
+                match_time = self.step_native_match_time.get(step_id)
+                step_entry["native_match_seconds"] = round(match_time, 3) if match_time else None
+            native_fn = self.step_native_function.get(step_id)
+            if native_fn:
+                step_entry["native_function"] = native_fn
+                step_entry["native_params"] = self.step_native_params.get(step_id)
+            steps.append(step_entry)
         return {
             "total_seconds": round(self.total_elapsed, 3),
             "planner_seconds": round(self.planner_elapsed, 3),

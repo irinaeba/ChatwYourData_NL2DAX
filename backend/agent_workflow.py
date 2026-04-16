@@ -92,6 +92,9 @@ from backend.utils.timing import PipelineTiming
 # Import prompts
 from backend.prompts.domain_registry import DOMAIN_REGISTRY
 
+# Import native functions
+from backend.native_functions.matcher import match_native_function, resolve_native_function
+
 logger = logging.getLogger(__name__)
 
 
@@ -402,6 +405,81 @@ def _summarize_result_for_chaining(result: dict, source_domain: str) -> str:
     return "\n".join(lines)
 
 
+def _run_native_function(shared: Dict, step_query: str, domain: str, access_token: str = None):
+    """
+    Try to match and execute a native function for the given query.
+
+    Returns a tuple: (result_dict_or_None, match_info_dict).
+    match_info is always populated so the pipeline can track the attempt.
+    """
+    print(f"[NATIVE] Checking for native function match (domain={domain})...")
+
+    match_result = match_native_function(step_query, domain=domain)
+    match_info = {
+        "attempted": True,
+        "matched": match_result.matched,
+        "function_name": match_result.function_name,
+        "match_elapsed": match_result.elapsed,
+    }
+
+    if not match_result.matched:
+        print(f"[NATIVE] No match found ({match_result.elapsed:.2f}s)")
+        return None, match_info
+
+    print(f"[NATIVE] Matched: {match_result.function_name} "
+          f"(params={match_result.parameters}, {match_result.elapsed:.2f}s)")
+
+    # Render the DAX template with extracted parameters
+    resolved = resolve_native_function(match_result)
+    if resolved is None:
+        print(f"[NATIVE] Failed to render template — falling back to LLM generation")
+        return None, match_info
+
+    dax_query = resolved["dax_query"]
+    print(f"[NATIVE] Rendered DAX:\n{dax_query[:300]}...")
+
+    # Execute the DAX directly using the shared executor
+    dax_executor = shared["dax_executor"]
+    try:
+        exec_result = dax_executor.execute(dax_query, access_token=access_token)
+
+        if not exec_result.success:
+            print(f"[NATIVE] Execution failed: {exec_result.error}")
+            print(f"[NATIVE] Falling back to LLM generation")
+            return None, match_info
+
+        result = {
+            "success": True,
+            "columns": exec_result.columns,
+            "data": exec_result.data,
+            "row_count": exec_result.row_count,
+            "dax_query": dax_query,
+            "intent": domain,
+            "error": None,
+            "requires_reauth": False,
+            "steps_completed": ["native_function", "execute_dax"],
+            "native_function": resolved["native_function"],
+            "native_params": resolved["parameters"],
+            "chart_metric_name": None,
+            "chart_dimension": None,
+            "chart_dimension_type": "none",
+            "user_query": step_query,
+            "step_timings": {"native_match": match_result.elapsed},
+            "dax_generation_ttft": None,
+            "dax_generation_ttlt": None,
+            "used_tables": resolved.get("used_tables", []),
+            "used_columns": resolved.get("used_columns", []),
+            "used_measures": resolved.get("used_measures", []),
+        }
+
+        print(f"[NATIVE] Success: {exec_result.row_count} rows returned")
+        return result, match_info
+
+    except Exception as e:
+        print(f"[NATIVE] Execution error: {e} — falling back to LLM generation")
+        return None, match_info
+
+
 async def _run_pipeline_async(
     shared: Dict[str, Any],
     workflow,
@@ -493,27 +571,53 @@ async def _run_pipeline_async(
 
         # Run the analyst workflow for this step
         timing.start_step(step.id, step.domain)
-        wf = _build_analyst_workflow(shared) if len(plan.steps) > 1 else workflow
-        result_json = await asyncio.to_thread(
-            _run_analyst, wf, shared, step_query, step.domain, conversation_history
+
+        # --- Native function fast path ---
+        # Check if this step can be served by a parameterized native function
+        # (bypasses LLM DAX generation entirely)
+        ctx = shared.get("_router_context", {})
+        native_result, native_match_info = await asyncio.to_thread(
+            _run_native_function, shared, step_query, step.domain,
+            ctx.get("access_token"),
         )
 
-        try:
-            result = json.loads(result_json)
-        except json.JSONDecodeError:
-            result = {"success": False, "error": f"Failed to parse {step.domain} result"}
+        # Record the native match attempt (regardless of outcome)
+        timing.record_native_attempt(
+            step.id,
+            matched=native_match_info.get("matched", False),
+            function_name=native_match_info.get("function_name"),
+            match_elapsed=native_match_info.get("match_elapsed", 0.0),
+        )
+
+        if native_result is not None:
+            result = native_result
+        else:
+            # --- Normal LLM path ---
+            wf = _build_analyst_workflow(shared) if len(plan.steps) > 1 else workflow
+            result_json = await asyncio.to_thread(
+                _run_analyst, wf, shared, step_query, step.domain, conversation_history
+            )
+
+            try:
+                result = json.loads(result_json)
+            except json.JSONDecodeError:
+                result = {"success": False, "error": f"Failed to parse {step.domain} result"}
 
         # End step timing and capture executor sub-timings from the result
         step_elapsed = timing.end_step(
             step.id,
             executor_timings=result.get("step_timings"),
+            native_function=result.get("native_function"),
+            native_match_time=native_match_info.get("match_elapsed", 0.0),
+            native_params=result.get("native_params"),
         )
 
         result["intent"] = step.domain
         step_results[step.id] = result
         all_analyst_results.append(result)
 
-        print(f"[PIPELINE]   Step {step.id} [{step.domain}]: {step_elapsed:.2f}s "
+        native_tag = f" [native:{result['native_function']}]" if result.get("native_function") else ""
+        print(f"[PIPELINE]   Step {step.id} [{step.domain}]{native_tag}: {step_elapsed:.2f}s "
               f"(success={result.get('success')}, rows={result.get('row_count', 0)})")
 
         # Check for auth errors - stop immediately
