@@ -150,12 +150,14 @@ def _build_filter_fragments(func: NativeFunction, params: Dict[str, Any]) -> Dic
 
     # Entity filter (common across feedback functions)
     entity = params.get("entity_filter", "")
+    entity_table = params.get("entity_table", "dimadge")
+    entity_column = params.get("entity_column", "ShortName")
     if entity:
         fragments["entity_filter_var"] = (
             f"VAR __EntityFilter =\n"
             f"        FILTER(\n"
-            f"            ALL('dimadge'[ShortName]),\n"
-            f"            'dimadge'[ShortName] = \"{entity}\"\n"
+            f"            ALL('{entity_table}'[{entity_column}]),\n"
+            f"            '{entity_table}'[{entity_column}] = \"{entity}\"\n"
             f"        )"
         )
         fragments["entity_filter_ref"] = "__EntityFilter,"

@@ -356,6 +356,41 @@ ORDER BY
                 required=True,
             ),
             NativeFunctionParameter(
+                name="entity_filter",
+                type="string",
+                description="Entity/ADGE name to filter by (e.g. 'DOH' for ShortName, 'Department of Health' for EnglishName). Leave empty for all entities.",
+                required=False,
+                default="",
+            ),
+            NativeFunctionParameter(
+                name="entity_table",
+                type="string",
+                description="Entity dimension table name (default 'dimadge')",
+                required=False,
+                default="dimadge",
+            ),
+            NativeFunctionParameter(
+                name="entity_column",
+                type="string",
+                description="Entity column to filter on: 'ShortName' for codes like DOH/DED, 'EnglishName' for full names like 'Department of Health'",
+                required=False,
+                default="ShortName",
+            ),
+            NativeFunctionParameter(
+                name="service_table",
+                type="string",
+                description="Service dimension table name (e.g. 'dimserviceuni' for feedback, 'DimService' for cases)",
+                required=False,
+                default="dimserviceuni",
+            ),
+            NativeFunctionParameter(
+                name="service_column",
+                type="string",
+                description="Service name column in the service dimension table (e.g. 'Service Name' for dimserviceuni, 'ServiceNameEn' for DimService)",
+                required=False,
+                default="Service Name",
+            ),
+            NativeFunctionParameter(
                 name="table_name",
                 type="string",
                 description="Fact table name containing the topic column (e.g. factadfeedback)",
@@ -389,17 +424,19 @@ ORDER BY
     VAR __CurrPeriod = FILTER(ALL('DimDate'), 'DimDate'[Year] = {curr_year} && 'DimDate'[Month] = {curr_month})
     VAR __PrevPeriod = FILTER(ALL('DimDate'), 'DimDate'[Year] = {prev_year} && 'DimDate'[Month] = {prev_month})
 
+    {entity_filter_var}
+
     -- 2. Lineage Filter (Crossjoin to avoid multi-table ALL errors)
     VAR __DimFilter =
         FILTER(
-            CROSSJOIN(ALL('DimService'[ServiceNameEn]), ALL('{table_name}'[{column_name}])),
-            NOT('DimService'[ServiceNameEn] IN {{{{ BLANK() }}}}) &&
-            NOT('{table_name}'[{column_name}] IN {{{{ BLANK() }}}})
+            CROSSJOIN(ALL('{service_table}'[{service_column}]), ALL('{table_name}'[{column_name}])),
+            NOT (ISBLANK('{service_table}'[{service_column}])) &&
+            NOT (ISBLANK('{table_name}'[{column_name}]))
         )
 
     -- 3. Top {top_services} Services by Service-Level Drop Impact
-    VAR __Svc_P1 = SUMMARIZECOLUMNS('DimService'[ServiceNameEn], __CurrPeriod, __DimFilter, "C_CSAT", [Happy Feedback Percentage], "C_Vol", [Total Feedback Responses Received])
-    VAR __Svc_P2 = SUMMARIZECOLUMNS('DimService'[ServiceNameEn], __PrevPeriod, __DimFilter, "P_CSAT", [Happy Feedback Percentage])
+    VAR __Svc_P1 = SUMMARIZECOLUMNS('{service_table}'[{service_column}], __CurrPeriod, __DimFilter, {entity_filter_ref} "C_CSAT", [Happy Feedback Percentage], "C_Vol", [Total Feedback Responses Received])
+    VAR __Svc_P2 = SUMMARIZECOLUMNS('{service_table}'[{service_column}], __PrevPeriod, __DimFilter, {entity_filter_ref} "P_CSAT", [Happy Feedback Percentage])
 
     VAR __TopServices =
         TOPN({top_services},
@@ -411,10 +448,10 @@ ORDER BY
     VAR __Result =
         GENERATE(
             __TopServices,
-            VAR __CurrentSvc = 'DimService'[ServiceNameEn]
+            VAR __CurrentSvc = '{service_table}'[{service_column}]
 
-            VAR __Topic_P1 = CALCULATETABLE(SUMMARIZECOLUMNS('{table_name}'[{column_name}], __CurrPeriod, __DimFilter, "TC_CSAT", [Happy Feedback Percentage], "TC_Vol", [Total Feedback Responses Received]), 'DimService'[ServiceNameEn] = __CurrentSvc)
-            VAR __Topic_P2 = CALCULATETABLE(SUMMARIZECOLUMNS('{table_name}'[{column_name}], __PrevPeriod, __DimFilter, "TP_CSAT", [Happy Feedback Percentage]), 'DimService'[ServiceNameEn] = __CurrentSvc)
+            VAR __Topic_P1 = CALCULATETABLE(SUMMARIZECOLUMNS('{table_name}'[{column_name}], __CurrPeriod, __DimFilter, {entity_filter_ref} "TC_CSAT", [Happy Feedback Percentage], "TC_Vol", [Total Feedback Responses Received]), '{service_table}'[{service_column}] = __CurrentSvc)
+            VAR __Topic_P2 = CALCULATETABLE(SUMMARIZECOLUMNS('{table_name}'[{column_name}], __PrevPeriod, __DimFilter, {entity_filter_ref} "TP_CSAT", [Happy Feedback Percentage]), '{service_table}'[{service_column}] = __CurrentSvc)
 
             VAR __TopicImpactTable =
                 ADDCOLUMNS(
@@ -431,8 +468,8 @@ ORDER BY
     [C_Vol] * ([P_CSAT] - [C_CSAT]) DESC,
     [TopicDropImpact] DESC""",
         notes="Native function: Root cause analysis — top services with biggest CSAT drop and contributing topics.",
-        used_tables=["factadfeedback", "DimService", "DimDate"],
-        used_columns=["DimService[ServiceNameEn]", "factadfeedback[FeedbackTopic]", "DimDate[Year]", "DimDate[Month]"],
+        used_tables=["factadfeedback", "dimserviceuni", "dimdate", "dimadge"],
+        used_columns=["dimserviceuni[Service Name]", "factadfeedback[FeedbackTopic]", "dimdate[Year]", "dimdate[Month]", "dimadge[ShortName]", "dimadge[EnglishName]"],
         used_measures=["Happy Feedback Percentage", "Total Feedback Responses Received"],
     ),
 
