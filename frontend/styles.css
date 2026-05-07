@@ -1,20 +1,20 @@
 /* ============================================================
-   TAMM - Abu Dhabi Government Services Chat UI
+   NL to DAX - Data Analytics Chat UI
    ============================================================ */
 
 :root {
-    --tamm-primary: #00A3E0;
-    --tamm-primary-dark: #0088B8;
-    --tamm-accent: #F39200;
-    --tamm-accent-light: #FDB913;
-    --tamm-light-bg: hsla(195, 3%, 76%, 0.178);
-    --tamm-dark-bg: #1F1F1F;
-    --tamm-text-dark: #333333;
-    --tamm-text-light: #666666;
-    --tamm-border: #E0E0E0;
-    --tamm-success: #107C10;
-    --tamm-error: #E81123;
-    --tamm-warning: #FFB900;
+    --app-primary: #00A3E0;
+    --app-primary-dark: #0088B8;
+    --app-accent: #F39200;
+    --app-accent-light: #FDB913;
+    --app-light-bg: hsla(195, 3%, 76%, 0.178);
+    --app-dark-bg: #1F1F1F;
+    --app-text-dark: #333333;
+    --app-text-light: #666666;
+    --app-border: #E0E0E0;
+    --app-success: #107C10;
+    --app-error: #E81123;
+    --app-warning: #FFB900;
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
@@ -37,7 +37,7 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: #ffffff;
-    color: var(--tamm-text-dark);
+    color: var(--app-text-dark);
     line-height: 1.6;
 }
 
@@ -58,11 +58,11 @@ body {
    ============================================================ */
 
 .app-header {
-    background: linear-gradient(135deg, var(--tamm-primary) 0%, #0088B8 100%);
+    background: linear-gradient(135deg, var(--app-primary) 0%, #0088B8 100%);
     color: white;
     padding: 16px 30px;
     box-shadow: var(--shadow-md);
-    border-bottom: 3px solid var(--tamm-accent);
+    border-bottom: 3px solid var(--app-accent);
 }
 
 .header-content {
@@ -101,17 +101,17 @@ body {
 }
 
 .dot.ready {
-    background-color: var(--tamm-success);
+    background-color: var(--app-success);
     box-shadow: 0 0 8px rgba(16, 124, 16, 0.6);
 }
 
 .dot.loading {
-    background-color: var(--tamm-warning);
+    background-color: var(--app-warning);
     animation: pulse 1.5s ease-in-out infinite;
 }
 
 .dot.error {
-    background-color: var(--tamm-error);
+    background-color: var(--app-error);
     animation: pulse 0.8s ease-in-out infinite;
 }
 
@@ -167,7 +167,7 @@ body {
 
 .welcome-panel h2 {
     font-size: 2.2rem;
-    color: var(--tamm-primary);
+    color: var(--app-primary);
     text-align: center;
     margin-bottom: 12px;
     font-weight: 700;
@@ -176,7 +176,7 @@ body {
 .welcome-subtitle {
     text-align: center;
     font-size: 1.1rem;
-    color: var(--tamm-text-light);
+    color: var(--app-text-light);
     margin-bottom: 30px;
 }
 
@@ -190,7 +190,7 @@ body {
 
 .welcome-description h3 {
     font-size: 1.1rem;
-    color: var(--tamm-text-dark);
+    color: var(--app-text-dark);
     margin-bottom: 16px;
     font-weight: 600;
 }
@@ -204,7 +204,7 @@ body {
     padding: 10px 0;
     padding-left: 30px;
     position: relative;
-    color: var(--tamm-text-light);
+    color: var(--app-text-light);
     line-height: 1.6;
 }
 
@@ -212,7 +212,7 @@ body {
     content: '✓';
     position: absolute;
     left: 0;
-    color: var(--tamm-primary);
+    color: var(--app-primary);
     font-weight: bold;
     font-size: 1.2rem;
 }
@@ -226,7 +226,7 @@ body {
 
 .sample-questions h3 {
     font-size: 1.1rem;
-    color: var(--tamm-text-dark);
+    color: var(--app-text-dark);
     margin-bottom: 16px;
     font-weight: 600;
 }
@@ -239,8 +239,8 @@ body {
 
 .sample-btn {
     padding: 16px;
-    background: linear-gradient(135deg, var(--tamm-light-bg) 0%, white 100%);
-    border: 2px solid var(--tamm-primary);
+    background: linear-gradient(135deg, var(--app-light-bg) 0%, white 100%);
+    border: 2px solid var(--app-primary);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -249,11 +249,11 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    color: var(--tamm-text-dark);
+    color: var(--app-text-dark);
 }
 
 .sample-btn:hover {
-    background: linear-gradient(135deg, var(--tamm-primary) 0%, #0088B8 100%);
+    background: linear-gradient(135deg, var(--app-primary) 0%, #0088B8 100%);
     color: white;
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
@@ -292,12 +292,12 @@ body {
 }
 
 .messages-container::-webkit-scrollbar-thumb {
-    background: var(--tamm-border);
+    background: var(--app-border);
     border-radius: 4px;
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover {
-    background: var(--tamm-text-light);
+    background: var(--app-text-light);
 }
 
 /* Message Styles */
@@ -342,12 +342,12 @@ body {
 }
 
 .message.user .message-avatar {
-    background: linear-gradient(135deg, var(--tamm-primary) 0%, #0088B8 100%);
+    background: linear-gradient(135deg, var(--app-primary) 0%, #0088B8 100%);
 }
 
 .message.bot .message-avatar {
-    background: var(--tamm-light-bg);
-    border: 2px solid var(--tamm-border);
+    background: var(--app-light-bg);
+    border: 2px solid var(--app-border);
 }
 
 .message-content {
@@ -373,23 +373,23 @@ body {
 }
 
 .message.user .message-bubble {
-    background: linear-gradient(135deg, var(--tamm-primary) 0%, #0088B8 100%);
+    background: linear-gradient(135deg, var(--app-primary) 0%, #0088B8 100%);
     color: white;
     border-radius: 12px 4px 12px 12px;
 }
 
 .message.bot .message-bubble {
-    background: var(--tamm-light-bg);
-    color: var(--tamm-text-dark);
+    background: var(--app-light-bg);
+    color: var(--app-text-dark);
     border-radius: 4px 12px 12px 12px;
 }
 
 .message.bot .message-bubble strong {
-    color: var(--tamm-primary);
+    color: var(--app-primary);
 }
 
 .message.bot .message-bubble a {
-    color: var(--tamm-primary);
+    color: var(--app-primary);
     text-decoration: none;
 }
 
@@ -408,11 +408,11 @@ body {
 .message.bot .message-bubble td {
     padding: 8px;
     text-align: left;
-    border: 1px solid var(--tamm-border);
+    border: 1px solid var(--app-border);
 }
 
 .message.bot .message-bubble th {
-    background: linear-gradient(135deg, var(--tamm-primary) 0%, #0088B8 100%);
+    background: linear-gradient(135deg, var(--app-primary) 0%, #0088B8 100%);
     color: white;
     font-weight: 600;
 }
@@ -456,7 +456,7 @@ body {
 }
 
 .message.bot .message-meta {
-    color: var(--tamm-text-light);
+    color: var(--app-text-light);
 }
 
 /* Typing Indicator */
@@ -465,7 +465,7 @@ body {
     display: flex;
     gap: 4px;
     padding: 14px 16px;
-    background: var(--tamm-light-bg);
+    background: var(--app-light-bg);
     border-radius: 4px 12px 12px 12px;
     width: fit-content;
 }
@@ -474,7 +474,7 @@ body {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background-color: var(--tamm-text-light);
+    background-color: var(--app-text-light);
     animation: typingBounce 1.4s infinite;
 }
 
@@ -503,7 +503,7 @@ body {
 
 .chat-footer {
     background: white;
-    border-top: 1px solid var(--tamm-border);
+    border-top: 1px solid var(--app-border);
     padding: 20px 30px;
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
@@ -521,7 +521,7 @@ body {
     gap: 8px;
     cursor: pointer;
     font-size: 0.95rem;
-    color: var(--tamm-text-light);
+    color: var(--app-text-light);
     user-select: none;
 }
 
@@ -529,7 +529,7 @@ body {
     width: 18px;
     height: 18px;
     cursor: pointer;
-    accent-color: var(--tamm-primary);
+    accent-color: var(--app-primary);
 }
 
 .input-group {
@@ -541,7 +541,7 @@ body {
 .question-input {
     flex: 1;
     padding: 12px 16px;
-    border: 2px solid var(--tamm-border);
+    border: 2px solid var(--app-border);
     border-radius: 8px;
     font-size: 0.95rem;
     font-family: inherit;
@@ -549,21 +549,21 @@ body {
     min-height: 44px;
     max-height: 120px;
     transition: all 0.3s ease;
-    color: var(--tamm-text-dark);
+    color: var(--app-text-dark);
 }
 
 .question-input:focus {
     outline: none;
-    border-color: var(--tamm-primary);
+    border-color: var(--app-primary);
     box-shadow: 0 0 0 3px rgba(0, 163, 224, 0.1);
 }
 
 .question-input::placeholder {
-    color: var(--tamm-text-light);
+    color: var(--app-text-light);
 }
 
 .question-input:disabled {
-    background-color: var(--tamm-light-bg);
+    background-color: var(--app-light-bg);
     opacity: 0.6;
     cursor: not-allowed;
 }
@@ -571,7 +571,7 @@ body {
 .send-button {
     height: 44px;
     padding: 0 24px;
-    background: linear-gradient(135deg, var(--tamm-primary) 0%, #0088B8 100%);
+    background: linear-gradient(135deg, var(--app-primary) 0%, #0088B8 100%);
     color: white;
     border: none;
     border-radius: 8px;
@@ -598,7 +598,7 @@ body {
 }
 
 .send-button:disabled {
-    background: var(--tamm-text-light);
+    background: var(--app-text-light);
     opacity: 0.5;
     cursor: not-allowed;
 }
@@ -614,16 +614,16 @@ body {
    ============================================================ */
 
 .app-footer {
-    background: var(--tamm-light-bg);
+    background: var(--app-light-bg);
     padding: 12px 30px;
     text-align: center;
     font-size: 0.85rem;
-    color: var(--tamm-text-light);
-    border-top: 1px solid var(--tamm-border);
+    color: var(--app-text-light);
+    border-top: 1px solid var(--app-border);
 }
 
 .app-footer a {
-    color: var(--tamm-primary);
+    color: var(--app-primary);
     text-decoration: none;
 }
 
@@ -1933,10 +1933,10 @@ body {
 .clarification-chip {
     display: inline-block;
     padding: 8px 16px;
-    background: var(--tamm-light-bg);
-    border: 1.5px solid var(--tamm-primary);
+    background: var(--app-light-bg);
+    border: 1.5px solid var(--app-primary);
     border-radius: 20px;
-    color: var(--tamm-primary-dark);
+    color: var(--app-primary-dark);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -1946,15 +1946,15 @@ body {
 }
 
 .clarification-chip:hover {
-    background: var(--tamm-primary);
+    background: var(--app-primary);
     color: #fff;
     box-shadow: var(--shadow-sm);
 }
 
 .clarification-chip.chip-selected {
-    background: var(--tamm-primary);
+    background: var(--app-primary);
     color: #fff;
-    border-color: var(--tamm-primary-dark);
+    border-color: var(--app-primary-dark);
     cursor: default;
 }
 

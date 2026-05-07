@@ -32,7 +32,7 @@ from semantic_kernel import Kernel
 from semantic_kernel.contents.chat_history import ChatHistory
 
 from backend.tools.auth import create_chat_service, get_llm_provider
-from backend.prompts.domain_registry import DOMAIN_REGISTRY
+from schema_extraction.domain_configs import DOMAIN_REGISTRY
 from backend.prompts.query_planner_prompt import build_planner_prompt
 from backend.executors.workflow_state import ConversationTurn
 

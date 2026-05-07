@@ -97,21 +97,142 @@ class NativeFunction:
 
 NATIVE_FUNCTIONS: List[NativeFunction] = [
 
+    # ==========================================================
+    # WORK ORDERS DOMAIN
+    # ==========================================================
+
     # ----------------------------------------------------------
-    # FEEDBACK: CSAT trend for last N months
+    # Work Orders: Count by type over time
     # ----------------------------------------------------------
     NativeFunction(
-        name="csat_trend_last_n_months",
-        domain="feedback",
-        description="CSAT (Customer Satisfaction) trend over the last N completed months, optionally filtered by entity/ADGE. Use for any question about CSAT over time.",
+        name="work_order_count_by_type",
+        domain="work_orders",
+        description="Work order count breakdown by work order type, optionally filtered by region and/or time period. Use for any question about how many work orders exist per type.",
         examples=[
-            "Show me CSAT trend for the last 6 months",
-            "What is the CSAT trend?",
-            "Show the overall CSAT trend for all entities for the last 12 months",
-            "CSAT over the last 3 months",
-            "Customer satisfaction trend",
-            "How has CSAT changed over time?",
-            "Monthly CSAT for DOH last 6 months",
+            "How many work orders by type?",
+            "Show work order count by type in Q1 2025",
+            "Work order breakdown by maintenance type",
+            "How many corrective vs preventive work orders?",
+            "Work order volume by type for Abu Dhabi City",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="region_filter",
+                type="string",
+                description="Region name to filter by (e.g. 'Abu Dhabi City', 'Al Ain', 'Al Dhafra'). Leave empty for all regions.",
+                required=False,
+                default="",
+            ),
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter (e.g. 2025). Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="quarter",
+                type="integer",
+                description="Quarter (1-4). Leave 0 for no quarter filter.",
+                required=False,
+                default=0,
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    {region_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'fact_work_orders'[work_order_type],
+            {date_filter_ref}
+            {region_filter_ref}
+            "Work Order Count", COUNTROWS('fact_work_orders')
+        )
+
+EVALUATE
+    __Core
+ORDER BY
+    [Work Order Count] DESC""",
+        notes="Native function: Work order count breakdown by type.",
+        used_tables=["fact_work_orders", "dim_date", "dim_region"],
+        used_columns=["fact_work_orders[work_order_type]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Work Orders: SLA breach rate by region
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="sla_breach_rate_by_region",
+        domain="work_orders",
+        description="SLA breach rate by region (or overall), optionally filtered by time period. Use for any question about SLA compliance, SLA breaches, or SLA performance across regions.",
+        examples=[
+            "What is the SLA breach rate by region?",
+            "SLA performance by region",
+            "Which region has the most SLA breaches?",
+            "Show SLA compliance rate",
+            "SLA breach rate for Q1 2025",
+            "How many work orders breached SLA?",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter (e.g. 2025). Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="quarter",
+                type="integer",
+                description="Quarter (1-4). Leave 0 for no quarter filter.",
+                required=False,
+                default=0,
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'dim_region'[region_name],
+            {date_filter_ref}
+            "Total Work Orders", COUNTROWS('fact_work_orders'),
+            "SLA Breached", CALCULATE(COUNTROWS('fact_work_orders'), 'fact_work_orders'[sla_breached_flag] = TRUE),
+            "SLA Breach Rate_Value", DIVIDE(CALCULATE(COUNTROWS('fact_work_orders'), 'fact_work_orders'[sla_breached_flag] = TRUE), COUNTROWS('fact_work_orders'))
+        )
+
+    VAR __Result =
+        ADDCOLUMNS(
+            __Core,
+            "SLA Breach Rate", FORMAT([SLA Breach Rate_Value], "0.0%")
+        )
+
+EVALUATE
+    __Result
+ORDER BY
+    [SLA Breach Rate_Value] DESC""",
+        notes="Native function: SLA breach rate by region.",
+        used_tables=["fact_work_orders", "dim_region", "dim_date"],
+        used_columns=["dim_region[region_name]", "fact_work_orders[sla_breached_flag]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Work Orders: Monthly trend
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="work_order_monthly_trend",
+        domain="work_orders",
+        description="Work order count trend over the last N months. Use for any question about work order volume trends over time.",
+        examples=[
+            "Show me work order trend for the last 6 months",
+            "Monthly work order count",
+            "How has work order volume changed over time?",
+            "Work order trend last 3 months",
+            "Work orders per month",
         ],
         parameters=[
             NativeFunctionParameter(
@@ -119,358 +240,638 @@ NATIVE_FUNCTIONS: List[NativeFunction] = [
                 type="integer",
                 description="Number of completed months to look back",
                 required=False,
-                default=3,
+                default=6,
             ),
             NativeFunctionParameter(
-                name="entity_filter",
+                name="region_filter",
                 type="string",
-                description="Entity/ADGE short name to filter by (e.g. 'DOH', 'DED'). Leave empty for all entities.",
+                description="Region name to filter by. Leave empty for all regions.",
                 required=False,
                 default="",
             ),
         ],
         dax_template="""DEFINE
     VAR __ReferenceDate = TODAY()
-    VAR __StartRange = EOMONTH(__ReferenceDate, -{n_months} - 1) + 1
+    VAR __StartRange = EOMONTH(__ReferenceDate, -{n_months}) + 1
     VAR __EndRange = EOMONTH(__ReferenceDate, -1)
 
     VAR __DateFilter =
         FILTER(
-            ALL('dimdate'),
-            'dimdate'[Date] >= __StartRange &&
-            'dimdate'[Date] <= __EndRange
+            ALL('dim_date'),
+            'dim_date'[date_key] >= INT(FORMAT(__StartRange, "YYYYMMDD")) &&
+            'dim_date'[date_key] <= INT(FORMAT(__EndRange, "YYYYMMDD"))
         )
 
-    {entity_filter_var}
+    {region_filter_var}
 
     VAR __Core =
         SUMMARIZECOLUMNS(
-            'dimdate'[Year],
-            'dimdate'[Month],
-            'dimdate'[MonthName],
+            'dim_date'[year],
+            'dim_date'[month_number],
+            'dim_date'[month_name],
             __DateFilter,
-            {entity_filter_ref}
-            "CSAT", FORMAT([Happy Feedback Percentage], "0.0%"),
-            "Total Responses", [Total Feedback Responses Received]
+            {region_filter_ref}
+            "Work Order Count", COUNTROWS('fact_work_orders')
         )
 
 EVALUATE
     __Core
 ORDER BY
-    'dimdate'[Year] ASC,
-    'dimdate'[Month] ASC""",
-        notes="Native function: CSAT trend over last N completed months.",
-        used_tables=["factadfeedback", "dimdate", "dimadge"],
-        used_columns=["dimdate[Year]", "dimdate[Month]", "dimdate[MonthName]"],
-        used_measures=["Happy Feedback Percentage", "Total Feedback Responses Received"],
+    'dim_date'[year] ASC,
+    'dim_date'[month_number] ASC""",
+        notes="Native function: Work order monthly trend over last N months.",
+        used_tables=["fact_work_orders", "dim_date", "dim_region"],
+        used_columns=["dim_date[year]", "dim_date[month_number]", "dim_date[month_name]"],
+        used_measures=[],
     ),
 
     # ----------------------------------------------------------
-    # FEEDBACK: NPS for a specific entity
+    # Work Orders: Top contractors by volume
     # ----------------------------------------------------------
     NativeFunction(
-        name="nps_by_entity",
-        domain="feedback",
-        description="Net Promoter Score (NPS) for a specific entity/ADGE or all entities, optionally for a given year and month. Use for any question about NPS scores, promoters, or detractors.",
+        name="top_contractors_by_work_orders",
+        domain="work_orders",
+        description="Top N contractors ranked by number of work orders assigned. Use for any question about contractor performance, top contractors, or contractor work load.",
         examples=[
-            "What is the NPS?",
-            "Show NPS by entity",
-            "NPS for DOH in March 2026",
-            "What is the Net Promoter Score for all entities?",
-            "Show me promoters and detractors",
-            "NPS breakdown",
-            "Which entity has the highest NPS?",
+            "Top 5 contractors by work order volume",
+            "Which contractor has the most work orders?",
+            "Contractor ranking by work orders",
+            "Show top contractors",
+            "Busiest contractors",
         ],
         parameters=[
             NativeFunctionParameter(
-                name="entity_filter",
-                type="string",
-                description="Entity/ADGE short name (e.g. 'DOH', 'DED'). Leave empty for all entities.",
-                required=False,
-                default="",
-            ),
-            NativeFunctionParameter(
-                name="year",
+                name="top_n",
                 type="integer",
-                description="Year to filter (e.g. 2026). Leave 0 for no year filter.",
-                required=False,
-                default=0,
-            ),
-            NativeFunctionParameter(
-                name="month",
-                type="integer",
-                description="Month number (1-12). Leave 0 for no month filter.",
-                required=False,
-                default=0,
-            ),
-        ],
-        dax_template="""DEFINE
-    {date_filter_var}
-
-    {entity_filter_var}
-
-    VAR __Core =
-        SUMMARIZECOLUMNS(
-            'dimadge'[ShortName],
-            {date_filter_ref}
-            {entity_filter_ref}
-            "NPS", [Net Promoter Score],
-            "Promoters %", FORMAT([Promotors Percentage], "0.0%"),
-            "Detractors %", FORMAT([Detractors Percentage], "0.0%"),
-            "Total Responses", [Total Feedback_NPS]
-        )
-
-    VAR __Filtered =
-        FILTER(
-            __Core,
-            [Total Responses] >= 30
-        )
-
-EVALUATE
-    __Filtered
-ORDER BY
-    [NPS] DESC""",
-        notes="Native function: NPS breakdown by entity.",
-        used_tables=["factadfeedback", "dimadge", "dimdate"],
-        used_columns=["dimadge[ShortName]"],
-        used_measures=["Net Promoter Score", "Promotors Percentage", "Detractors Percentage", "Total Feedback_NPS"],
-    ),
-
-    # ----------------------------------------------------------
-    # FEEDBACK: CES (Customer Effort Score) by entity
-    # ----------------------------------------------------------
-    NativeFunction(
-        name="ces_by_entity",
-        domain="feedback",
-        description="Customer Effort Score (CES) by entity/ADGE, optionally for a specific time period. Use for any question about CES, customer effort, or ease of service.",
-        examples=[
-            "What is the CES?",
-            "Show CES by entity",
-            "Customer Effort Score for all entities",
-            "CES for DOH",
-            "What is the customer effort score in March 2026?",
-            "Show me CES scores",
-            "Which entity has the best CES?",
-            "How easy is it for customers?",
-        ],
-        parameters=[
-            NativeFunctionParameter(
-                name="entity_filter",
-                type="string",
-                description="Entity/ADGE short name. Leave empty for all entities.",
-                required=False,
-                default="",
-            ),
-            NativeFunctionParameter(
-                name="year",
-                type="integer",
-                description="Year to filter (e.g. 2026). Leave 0 for no year filter.",
-                required=False,
-                default=0,
-            ),
-            NativeFunctionParameter(
-                name="month",
-                type="integer",
-                description="Month number (1-12). Leave 0 for no month filter.",
-                required=False,
-                default=0,
-            ),
-        ],
-        dax_template="""DEFINE
-    {date_filter_var}
-
-    {entity_filter_var}
-
-    VAR __Core =
-        SUMMARIZECOLUMNS(
-            'dimadge'[ShortName],
-            {date_filter_ref}
-            {entity_filter_ref}
-            "CES", FORMAT([CES], "0.0%"),
-            "Total Responses", [Total Feedback Responses Received]
-        )
-
-    VAR __Filtered =
-        FILTER(
-            __Core,
-            [Total Responses] >= 30
-        )
-
-EVALUATE
-    __Filtered
-ORDER BY
-    [CES] DESC""",
-        notes="Native function: CES by entity.",
-        used_tables=["factadfeedback", "dimadge", "dimdate"],
-        used_columns=["dimadge[ShortName]"],
-        used_measures=["CES", "Total Feedback Responses Received"],
-    ),
-
-    # ----------------------------------------------------------
-    # FEEDBACK: Root Cause & Topic Impact Analysis
-    # ----------------------------------------------------------
-    NativeFunction(
-        name="root_cause_topic_impact",
-        domain="feedback",
-        description=(
-            "Root cause & topic impact analysis for CSAT decline: explains WHY "
-            "CSAT dropped by showing the services and topics driving the decline "
-            "between two periods. Use for any question asking why CSAT decreased, "
-            "what caused a CSAT drop, or root cause analysis of CSAT."
-        ),
-        examples=[
-            "What topics are driving the CSAT drop in March vs February 2026?",
-            "Root cause analysis for CSAT decline",
-            "Why did CSAT drop? Show me the topics",
-            "Which services had the biggest CSAT drop and what topics caused it?",
-            "Show topic impact analysis for March 2026 vs February 2026",
-            "Why did the CSAT decline for Department of Energy?",
-            "What caused the CSAT drop for DOH between January and February 2026?",
-            "Why is CSAT lower this month compared to last month?",
-            "What are the root causes of CSAT decline?",
-            "Which topics are causing the CSAT decrease?",
-        ],
-        parameters=[
-            NativeFunctionParameter(
-                name="curr_year",
-                type="integer",
-                description="Current (comparison) period year, e.g. 2026",
-                required=True,
-            ),
-            NativeFunctionParameter(
-                name="curr_month",
-                type="integer",
-                description="Current (comparison) period month (1-12)",
-                required=True,
-            ),
-            NativeFunctionParameter(
-                name="prev_year",
-                type="integer",
-                description="Previous (baseline) period year, e.g. 2026",
-                required=True,
-            ),
-            NativeFunctionParameter(
-                name="prev_month",
-                type="integer",
-                description="Previous (baseline) period month (1-12)",
-                required=True,
-            ),
-            NativeFunctionParameter(
-                name="entity_filter",
-                type="string",
-                description="Entity/ADGE name to filter by (e.g. 'DOH' for ShortName, 'Department of Health' for EnglishName). Leave empty for all entities.",
-                required=False,
-                default="",
-            ),
-            NativeFunctionParameter(
-                name="entity_table",
-                type="string",
-                description="Entity dimension table name (default 'dimadge')",
-                required=False,
-                default="dimadge",
-            ),
-            NativeFunctionParameter(
-                name="entity_column",
-                type="string",
-                description="Entity column to filter on: 'ShortName' for codes like DOH/DED, 'EnglishName' for full names like 'Department of Health'",
-                required=False,
-                default="ShortName",
-            ),
-            NativeFunctionParameter(
-                name="service_table",
-                type="string",
-                description="Service dimension table name (e.g. 'dimserviceuni' for feedback, 'DimService' for cases)",
-                required=False,
-                default="dimserviceuni",
-            ),
-            NativeFunctionParameter(
-                name="service_column",
-                type="string",
-                description="Service name column in the service dimension table (e.g. 'Service Name' for dimserviceuni, 'ServiceNameEn' for DimService)",
-                required=False,
-                default="Service Name",
-            ),
-            NativeFunctionParameter(
-                name="table_name",
-                type="string",
-                description="Fact table name containing the topic column (e.g. factadfeedback)",
-                required=False,
-                default="factadfeedback",
-            ),
-            NativeFunctionParameter(
-                name="column_name",
-                type="string",
-                description="Topic/category column name (e.g. FeedbackTopic)",
-                required=False,
-                default="FeedbackTopic",
-            ),
-            NativeFunctionParameter(
-                name="top_services",
-                type="integer",
-                description="Number of top services to return",
+                description="Number of top contractors to return",
                 required=False,
                 default=5,
             ),
             NativeFunctionParameter(
-                name="top_topics",
+                name="year",
                 type="integer",
-                description="Number of top topics per service to return",
+                description="Year to filter (e.g. 2025). Leave 0 for no year filter.",
                 required=False,
-                default=3,
+                default=0,
             ),
         ],
         dax_template="""DEFINE
-    -- 1. Period Definitions
-    VAR __CurrPeriod = FILTER(ALL('DimDate'), 'DimDate'[Year] = {curr_year} && 'DimDate'[Month] = {curr_month})
-    VAR __PrevPeriod = FILTER(ALL('DimDate'), 'DimDate'[Year] = {prev_year} && 'DimDate'[Month] = {prev_month})
+    {date_filter_var}
 
-    {entity_filter_var}
-
-    -- 2. Lineage Filter (Crossjoin to avoid multi-table ALL errors)
-    VAR __DimFilter =
-        FILTER(
-            CROSSJOIN(ALL('{service_table}'[{service_column}]), ALL('{table_name}'[{column_name}])),
-            NOT (ISBLANK('{service_table}'[{service_column}])) &&
-            NOT (ISBLANK('{table_name}'[{column_name}]))
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'dim_contractor'[contractor_name],
+            {date_filter_ref}
+            "Work Order Count", COUNTROWS('fact_work_orders')
         )
 
-    -- 3. Top {top_services} Services by Service-Level Drop Impact
-    VAR __Svc_P1 = SUMMARIZECOLUMNS('{service_table}'[{service_column}], __CurrPeriod, __DimFilter, {entity_filter_ref} "C_CSAT", [Happy Feedback Percentage], "C_Vol", [Total Feedback Responses Received])
-    VAR __Svc_P2 = SUMMARIZECOLUMNS('{service_table}'[{service_column}], __PrevPeriod, __DimFilter, {entity_filter_ref} "P_CSAT", [Happy Feedback Percentage])
+    VAR __Result = TOPN({top_n}, __Core, [Work Order Count], DESC)
 
-    VAR __TopServices =
-        TOPN({top_services},
-            FILTER(NATURALINNERJOIN(__Svc_P1, __Svc_P2), [P_CSAT] > [C_CSAT]),
-            [C_Vol] * ([P_CSAT] - [C_CSAT]), DESC
+EVALUATE
+    __Result
+ORDER BY
+    [Work Order Count] DESC""",
+        notes="Native function: Top contractors by work order volume.",
+        used_tables=["fact_work_orders", "dim_contractor", "dim_date"],
+        used_columns=["dim_contractor[contractor_name]"],
+        used_measures=[],
+    ),
+
+    # ==========================================================
+    # MAINTENANCE COSTS DOMAIN
+    # ==========================================================
+
+    # ----------------------------------------------------------
+    # Maintenance Costs: Total cost by entity
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="maintenance_cost_by_entity",
+        domain="maintenance_costs",
+        description="Total maintenance cost breakdown by entity, optionally filtered by time period. Use for questions about overall maintenance spending, cost by entity, or total cost.",
+        examples=[
+            "What is the total maintenance cost by entity?",
+            "Maintenance spending breakdown",
+            "Which entity spends the most on maintenance?",
+            "Total cost by entity for Q1 2025",
+            "Show maintenance costs per entity",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter. Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="quarter",
+                type="integer",
+                description="Quarter (1-4). Leave 0 for no quarter filter.",
+                required=False,
+                default=0,
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'dim_entity'[entity_name],
+            {date_filter_ref}
+            "Total Cost (AED)", SUM('fact_maintenance_costs'[total_cost_aed]),
+            "Labor Cost (AED)", SUM('fact_maintenance_costs'[labor_cost_aed]),
+            "Materials Cost (AED)", SUM('fact_maintenance_costs'[materials_cost_aed]),
+            "Equipment Cost (AED)", SUM('fact_maintenance_costs'[equipment_cost_aed])
         )
 
-    -- 4. For each service, find Top {top_topics} Topics (Topic-Level Drop Impact)
+EVALUATE
+    __Core
+ORDER BY
+    [Total Cost (AED)] DESC""",
+        notes="Native function: Total maintenance cost breakdown by entity.",
+        used_tables=["fact_maintenance_costs", "dim_entity", "dim_date"],
+        used_columns=["dim_entity[entity_name]", "fact_maintenance_costs[total_cost_aed]", "fact_maintenance_costs[labor_cost_aed]", "fact_maintenance_costs[materials_cost_aed]", "fact_maintenance_costs[equipment_cost_aed]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Maintenance Costs: Cost comparison between two quarters
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="maintenance_cost_quarter_comparison",
+        domain="maintenance_costs",
+        description="Compare total maintenance costs between two quarters. Use for questions about cost changes between periods, quarter-over-quarter comparison, or cost trends.",
+        examples=[
+            "How do maintenance costs compare between Q1 and Q2 2025?",
+            "Compare Q1 and Q2 maintenance costs",
+            "Maintenance cost change from Q1 to Q2",
+            "Quarter over quarter cost comparison",
+            "Cost difference between Q3 and Q4 2025",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year1",
+                type="integer",
+                description="Year of the first (baseline) quarter",
+                required=True,
+            ),
+            NativeFunctionParameter(
+                name="quarter1",
+                type="integer",
+                description="First quarter number (1-4)",
+                required=True,
+            ),
+            NativeFunctionParameter(
+                name="year2",
+                type="integer",
+                description="Year of the second (comparison) quarter",
+                required=True,
+            ),
+            NativeFunctionParameter(
+                name="quarter2",
+                type="integer",
+                description="Second quarter number (1-4)",
+                required=True,
+            ),
+        ],
+        dax_template="""DEFINE
+    VAR __Period1 =
+        SUMMARIZECOLUMNS(
+            'dim_entity'[entity_name],
+            FILTER(ALL('dim_date'), 'dim_date'[year] = {year1} && 'dim_date'[quarter] = {quarter1}),
+            "Cost_Q1", SUM('fact_maintenance_costs'[total_cost_aed])
+        )
+
+    VAR __Period2 =
+        SUMMARIZECOLUMNS(
+            'dim_entity'[entity_name],
+            FILTER(ALL('dim_date'), 'dim_date'[year] = {year2} && 'dim_date'[quarter] = {quarter2}),
+            "Cost_Q2", SUM('fact_maintenance_costs'[total_cost_aed])
+        )
+
+    VAR __Joined = NATURALINNERJOIN(__Period1, __Period2)
+
     VAR __Result =
-        GENERATE(
-            __TopServices,
-            VAR __CurrentSvc = '{service_table}'[{service_column}]
-
-            VAR __Topic_P1 = CALCULATETABLE(SUMMARIZECOLUMNS('{table_name}'[{column_name}], __CurrPeriod, __DimFilter, {entity_filter_ref} "TC_CSAT", [Happy Feedback Percentage], "TC_Vol", [Total Feedback Responses Received]), '{service_table}'[{service_column}] = __CurrentSvc)
-            VAR __Topic_P2 = CALCULATETABLE(SUMMARIZECOLUMNS('{table_name}'[{column_name}], __PrevPeriod, __DimFilter, {entity_filter_ref} "TP_CSAT", [Happy Feedback Percentage]), '{service_table}'[{service_column}] = __CurrentSvc)
-
-            VAR __TopicImpactTable =
-                ADDCOLUMNS(
-                    FILTER(NATURALINNERJOIN(__Topic_P1, __Topic_P2), [TP_CSAT] > [TC_CSAT]),
-                    "TopicDropImpact", [TC_Vol] * ([TP_CSAT] - [TC_CSAT])
-                )
-
-            RETURN TOPN({top_topics}, __TopicImpactTable, [TopicDropImpact], DESC)
+        ADDCOLUMNS(
+            __Joined,
+            "Change (AED)", [Cost_Q2] - [Cost_Q1],
+            "Change %", FORMAT(DIVIDE([Cost_Q2] - [Cost_Q1], [Cost_Q1]), "0.0%")
         )
 
 EVALUATE
     __Result
 ORDER BY
-    [C_Vol] * ([P_CSAT] - [C_CSAT]) DESC,
-    [TopicDropImpact] DESC""",
-        notes="Native function: Root cause analysis — top services with biggest CSAT drop and contributing topics.",
-        used_tables=["factadfeedback", "dimserviceuni", "dimdate", "dimadge"],
-        used_columns=["dimserviceuni[Service Name]", "factadfeedback[FeedbackTopic]", "dimdate[Year]", "dimdate[Month]", "dimadge[ShortName]", "dimadge[EnglishName]"],
-        used_measures=["Happy Feedback Percentage", "Total Feedback Responses Received"],
+    [Change (AED)] DESC""",
+        notes="Native function: Quarter-over-quarter maintenance cost comparison by entity.",
+        used_tables=["fact_maintenance_costs", "dim_entity", "dim_date"],
+        used_columns=["dim_entity[entity_name]", "dim_date[year]", "dim_date[quarter]", "fact_maintenance_costs[total_cost_aed]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Maintenance Costs: Cost by work order type
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="maintenance_cost_by_work_order_type",
+        domain="maintenance_costs",
+        description="Maintenance cost breakdown by work order type. Use for questions about cost per work type (corrective, preventive, etc.).",
+        examples=[
+            "What is the maintenance cost by work order type?",
+            "Cost of corrective vs preventive maintenance",
+            "Spending by maintenance type",
+            "How much does each type of work order cost?",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter. Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="quarter",
+                type="integer",
+                description="Quarter (1-4). Leave 0 for no quarter filter.",
+                required=False,
+                default=0,
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'fact_maintenance_costs'[work_order_type],
+            {date_filter_ref}
+            "Total Cost (AED)", SUM('fact_maintenance_costs'[total_cost_aed]),
+            "Labor Hours", SUM('fact_maintenance_costs'[labor_hours]),
+            "Avg Cost per WO", DIVIDE(SUM('fact_maintenance_costs'[total_cost_aed]), COUNTROWS('fact_maintenance_costs'))
+        )
+
+EVALUATE
+    __Core
+ORDER BY
+    [Total Cost (AED)] DESC""",
+        notes="Native function: Maintenance cost by work order type.",
+        used_tables=["fact_maintenance_costs", "dim_date"],
+        used_columns=["fact_maintenance_costs[work_order_type]", "fact_maintenance_costs[total_cost_aed]", "fact_maintenance_costs[labor_hours]"],
+        used_measures=[],
+    ),
+
+    # ==========================================================
+    # DOWNTIME DOMAIN
+    # ==========================================================
+
+    # ----------------------------------------------------------
+    # Downtime: Top assets by downtime hours
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="top_assets_by_downtime",
+        domain="downtime",
+        description="Top N assets with the most downtime hours. Use for questions about which assets have the most outages, longest downtime, or worst-performing assets.",
+        examples=[
+            "Which assets have the most downtime?",
+            "Top 10 assets by downtime hours",
+            "Assets with longest outages",
+            "Worst performing assets by downtime",
+            "Show me assets with the highest downtime",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="top_n",
+                type="integer",
+                description="Number of top assets to return",
+                required=False,
+                default=10,
+            ),
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter. Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'dim_asset'[asset_name],
+            'dim_asset_category'[asset_category_name],
+            {date_filter_ref}
+            "Total Downtime Hours", SUM('fact_asset_downtime'[downtime_hours]),
+            "Downtime Events", COUNTROWS('fact_asset_downtime')
+        )
+
+    VAR __Result = TOPN({top_n}, __Core, [Total Downtime Hours], DESC)
+
+EVALUATE
+    __Result
+ORDER BY
+    [Total Downtime Hours] DESC""",
+        notes="Native function: Top assets by total downtime hours.",
+        used_tables=["fact_asset_downtime", "dim_asset", "dim_asset_category", "dim_date"],
+        used_columns=["dim_asset[asset_name]", "dim_asset_category[asset_category_name]", "fact_asset_downtime[downtime_hours]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Downtime: Events by reason
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="downtime_by_reason",
+        domain="downtime",
+        description="Downtime event count and total hours grouped by downtime reason. Use for questions about why assets are going offline, causes of downtime, or downtime reason breakdown.",
+        examples=[
+            "What are the main reasons for asset downtime?",
+            "Downtime by reason",
+            "Why are assets going offline?",
+            "Show downtime causes",
+            "Breakdown of downtime reasons",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter. Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="region_filter",
+                type="string",
+                description="Region name to filter by. Leave empty for all regions.",
+                required=False,
+                default="",
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    {region_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'fact_asset_downtime'[downtime_reason],
+            {date_filter_ref}
+            {region_filter_ref}
+            "Total Downtime Hours", SUM('fact_asset_downtime'[downtime_hours]),
+            "Event Count", COUNTROWS('fact_asset_downtime')
+        )
+
+EVALUATE
+    __Core
+ORDER BY
+    [Total Downtime Hours] DESC""",
+        notes="Native function: Downtime breakdown by reason.",
+        used_tables=["fact_asset_downtime", "dim_date", "dim_region"],
+        used_columns=["fact_asset_downtime[downtime_reason]", "fact_asset_downtime[downtime_hours]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Downtime: Critical public impact events
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="downtime_high_public_impact",
+        domain="downtime",
+        description="Downtime events with High or Critical public impact. Use for questions about critical outages, public-impact events, or high-severity downtime.",
+        examples=[
+            "How many downtime events had critical public impact?",
+            "Show high impact downtime events",
+            "Critical public impact outages",
+            "Downtime events affecting the public",
+            "High severity downtime count",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter. Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="impact_levels",
+                type="string",
+                description="Comma-separated impact levels to include (e.g. 'High,Critical'). Default is 'High,Critical'.",
+                required=False,
+                default="High,Critical",
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    VAR __ImpactFilter =
+        FILTER(
+            ALL('fact_asset_downtime'[public_impact]),
+            'fact_asset_downtime'[public_impact] IN {{{impact_levels_formatted}}}
+        )
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'fact_asset_downtime'[public_impact],
+            'dim_region'[region_name],
+            {date_filter_ref}
+            __ImpactFilter,
+            "Total Downtime Hours", SUM('fact_asset_downtime'[downtime_hours]),
+            "Event Count", COUNTROWS('fact_asset_downtime')
+        )
+
+EVALUATE
+    __Core
+ORDER BY
+    [Event Count] DESC""",
+        notes="Native function: Downtime events with high/critical public impact by region.",
+        used_tables=["fact_asset_downtime", "dim_region", "dim_date"],
+        used_columns=["fact_asset_downtime[public_impact]", "dim_region[region_name]", "fact_asset_downtime[downtime_hours]"],
+        used_measures=[],
+    ),
+
+    # ==========================================================
+    # CITIZEN COMPLAINTS DOMAIN
+    # ==========================================================
+
+    # ----------------------------------------------------------
+    # Citizen Complaints: Monthly complaint trend
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="complaint_monthly_trend",
+        domain="citizen_complaints",
+        description="Citizen complaint count trend over the last N months. Use for questions about complaint volume trends, monthly complaints, or how complaints are changing over time.",
+        examples=[
+            "Show monthly complaint trends",
+            "Complaint count over last 6 months",
+            "How are complaints trending?",
+            "Monthly complaint volume",
+            "Complaint trend for 2025",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="n_months",
+                type="integer",
+                description="Number of completed months to look back",
+                required=False,
+                default=6,
+            ),
+            NativeFunctionParameter(
+                name="region_filter",
+                type="string",
+                description="Region name to filter by. Leave empty for all regions.",
+                required=False,
+                default="",
+            ),
+        ],
+        dax_template="""DEFINE
+    VAR __ReferenceDate = TODAY()
+    VAR __StartRange = EOMONTH(__ReferenceDate, -{n_months}) + 1
+    VAR __EndRange = EOMONTH(__ReferenceDate, -1)
+
+    VAR __DateFilter =
+        FILTER(
+            ALL('dim_date'),
+            'dim_date'[date_key] >= INT(FORMAT(__StartRange, "YYYYMMDD")) &&
+            'dim_date'[date_key] <= INT(FORMAT(__EndRange, "YYYYMMDD"))
+        )
+
+    {region_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'dim_date'[year],
+            'dim_date'[month_number],
+            'dim_date'[month_name],
+            __DateFilter,
+            {region_filter_ref}
+            "Complaint Count", COUNTROWS('fact_citizen_complaints'),
+            "Avg Response Time (hrs)", AVERAGE('fact_citizen_complaints'[response_time_hours])
+        )
+
+EVALUATE
+    __Core
+ORDER BY
+    'dim_date'[year] ASC,
+    'dim_date'[month_number] ASC""",
+        notes="Native function: Monthly complaint trend over last N months.",
+        used_tables=["fact_citizen_complaints", "dim_date", "dim_region"],
+        used_columns=["dim_date[year]", "dim_date[month_number]", "dim_date[month_name]", "fact_citizen_complaints[response_time_hours]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Citizen Complaints: By complaint type
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="complaints_by_type",
+        domain="citizen_complaints",
+        description="Complaint count grouped by complaint type. Use for questions about what kinds of complaints are most common, complaint type breakdown, or top complaint categories.",
+        examples=[
+            "What are the most common complaint types?",
+            "Complaints by type",
+            "Top complaint categories",
+            "What do citizens complain about the most?",
+            "Complaint breakdown by issue type",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter. Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="quarter",
+                type="integer",
+                description="Quarter (1-4). Leave 0 for no quarter filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="region_filter",
+                type="string",
+                description="Region name to filter by. Leave empty for all regions.",
+                required=False,
+                default="",
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    {region_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'fact_citizen_complaints'[complaint_type],
+            {date_filter_ref}
+            {region_filter_ref}
+            "Complaint Count", COUNTROWS('fact_citizen_complaints'),
+            "Avg Satisfaction Score", AVERAGE('fact_citizen_complaints'[citizen_satisfaction_score]),
+            "Avg Response Time (hrs)", AVERAGE('fact_citizen_complaints'[response_time_hours])
+        )
+
+EVALUATE
+    __Core
+ORDER BY
+    [Complaint Count] DESC""",
+        notes="Native function: Complaint count by complaint type.",
+        used_tables=["fact_citizen_complaints", "dim_date", "dim_region"],
+        used_columns=["fact_citizen_complaints[complaint_type]", "fact_citizen_complaints[citizen_satisfaction_score]", "fact_citizen_complaints[response_time_hours]"],
+        used_measures=[],
+    ),
+
+    # ----------------------------------------------------------
+    # Citizen Complaints: Satisfaction score by region
+    # ----------------------------------------------------------
+    NativeFunction(
+        name="complaint_satisfaction_by_region",
+        domain="citizen_complaints",
+        description="Average citizen satisfaction score by region. Use for questions about citizen satisfaction, happiness scores, or regional service quality.",
+        examples=[
+            "What is the citizen satisfaction score by region?",
+            "Satisfaction scores across regions",
+            "Which region has the happiest citizens?",
+            "Average satisfaction by region",
+            "Citizen happiness rating by area",
+        ],
+        parameters=[
+            NativeFunctionParameter(
+                name="year",
+                type="integer",
+                description="Year to filter. Leave 0 for no year filter.",
+                required=False,
+                default=0,
+            ),
+            NativeFunctionParameter(
+                name="quarter",
+                type="integer",
+                description="Quarter (1-4). Leave 0 for no quarter filter.",
+                required=False,
+                default=0,
+            ),
+        ],
+        dax_template="""DEFINE
+    {date_filter_var}
+
+    VAR __Core =
+        SUMMARIZECOLUMNS(
+            'dim_region'[region_name],
+            {date_filter_ref}
+            "Avg Satisfaction Score", AVERAGE('fact_citizen_complaints'[citizen_satisfaction_score]),
+            "Total Complaints", COUNTROWS('fact_citizen_complaints'),
+            "Avg Response Time (hrs)", AVERAGE('fact_citizen_complaints'[response_time_hours])
+        )
+
+EVALUATE
+    __Core
+ORDER BY
+    [Avg Satisfaction Score] DESC""",
+        notes="Native function: Citizen satisfaction score by region.",
+        used_tables=["fact_citizen_complaints", "dim_region", "dim_date"],
+        used_columns=["dim_region[region_name]", "fact_citizen_complaints[citizen_satisfaction_score]", "fact_citizen_complaints[response_time_hours]"],
+        used_measures=[],
     ),
 
 ]

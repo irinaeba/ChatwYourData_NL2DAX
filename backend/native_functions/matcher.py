@@ -144,14 +144,29 @@ def _build_filter_fragments(func: NativeFunction, params: Dict[str, Any]) -> Dic
     Build dynamic DAX filter fragments based on parameter values.
 
     This handles the conditional filter logic that the simple .format()
-    cannot do (e.g., entity filter is only included when a value is provided).
+    cannot do (e.g., region filter is only included when a value is provided).
     """
     fragments = dict(params)
 
-    # Entity filter (common across feedback functions)
+    # Region filter
+    region = params.get("region_filter", "")
+    if region:
+        fragments["region_filter_var"] = (
+            f"VAR __RegionFilter =\n"
+            f"        FILTER(\n"
+            f"            ALL('dim_region'[region_name]),\n"
+            f"            'dim_region'[region_name] = \"{region}\"\n"
+            f"        )"
+        )
+        fragments["region_filter_ref"] = "__RegionFilter,"
+    else:
+        fragments["region_filter_var"] = "// No region filter applied"
+        fragments["region_filter_ref"] = ""
+
+    # Entity filter (for new model - dim_entity)
     entity = params.get("entity_filter", "")
-    entity_table = params.get("entity_table", "dimadge")
-    entity_column = params.get("entity_column", "ShortName")
+    entity_table = params.get("entity_table", "dim_entity")
+    entity_column = params.get("entity_column", "entity_name")
     if entity:
         fragments["entity_filter_var"] = (
             f"VAR __EntityFilter =\n"
@@ -165,15 +180,25 @@ def _build_filter_fragments(func: NativeFunction, params: Dict[str, Any]) -> Dic
         fragments["entity_filter_var"] = "// No entity filter applied"
         fragments["entity_filter_ref"] = ""
 
-    # Date filter (year/month)
+    # Date filter (year/quarter/month)
     year = params.get("year", 0)
+    quarter = params.get("quarter", 0)
     month = params.get("month", 0)
-    if year and month:
+    if year and quarter:
         fragments["date_filter_var"] = (
             f"VAR __DateFilter =\n"
             f"        FILTER(\n"
-            f"            ALL('dimdate'),\n"
-            f"            'dimdate'[Year] = {year} && 'dimdate'[Month] = {month}\n"
+            f"            ALL('dim_date'),\n"
+            f"            'dim_date'[year] = {year} && 'dim_date'[quarter] = {quarter}\n"
+            f"        )"
+        )
+        fragments["date_filter_ref"] = "__DateFilter,"
+    elif year and month:
+        fragments["date_filter_var"] = (
+            f"VAR __DateFilter =\n"
+            f"        FILTER(\n"
+            f"            ALL('dim_date'),\n"
+            f"            'dim_date'[year] = {year} && 'dim_date'[month_number] = {month}\n"
             f"        )"
         )
         fragments["date_filter_ref"] = "__DateFilter,"
@@ -181,14 +206,22 @@ def _build_filter_fragments(func: NativeFunction, params: Dict[str, Any]) -> Dic
         fragments["date_filter_var"] = (
             f"VAR __DateFilter =\n"
             f"        FILTER(\n"
-            f"            ALL('dimdate'),\n"
-            f"            'dimdate'[Year] = {year}\n"
+            f"            ALL('dim_date'),\n"
+            f"            'dim_date'[year] = {year}\n"
             f"        )"
         )
         fragments["date_filter_ref"] = "__DateFilter,"
     else:
         fragments["date_filter_var"] = "// No date filter applied"
         fragments["date_filter_ref"] = ""
+
+    # Impact levels formatting (for downtime_high_public_impact)
+    impact_levels = params.get("impact_levels", "")
+    if impact_levels:
+        levels = [l.strip() for l in impact_levels.split(",")]
+        fragments["impact_levels_formatted"] = ", ".join(f'"{l}"' for l in levels)
+    else:
+        fragments["impact_levels_formatted"] = '"High", "Critical"'
 
     return fragments
 

@@ -40,24 +40,59 @@ class SchemaSplitter:
         self.model = schema["model"]
 
     # ----------------------------------------------------------
-    # Discover connected tables via relationships
+    # Discover connected tables via relationships (recursive)
     # ----------------------------------------------------------
     def _find_connected_tables(self, fact_tables: List[str]) -> Set[str]:
         """
-        Walk relationships to find all tables connected to the given fact tables.
+        Recursively walk relationships to find all tables reachable
+        from the given fact tables, stopping at other fact tables.
+
+        Traverses the relationship graph: if fact_a -> dim_b -> dim_c,
+        all three tables are included. However, if a branch leads to
+        another domain's fact table, traversal stops on that branch
+        (the other fact table is NOT included).
 
         Includes both active and inactive relationships.
         """
-        fact_set = {t.lower() for t in fact_tables}
-        connected: Set[str] = set(fact_set)
+        # Collect all fact tables in the model as stop boundaries.
+        # A table is considered a fact table if its name starts with "fact_".
+        all_fact_tables: Set[str] = {
+            t["name"].lower()
+            for t in self.model.get("tables", [])
+            if t["name"].lower().startswith("fact_")
+        }
 
+        # The current domain's fact tables are NOT boundaries
+        fact_set = {t.lower() for t in fact_tables}
+        stop_tables = all_fact_tables - fact_set
+
+        # Build adjacency list from relationships
+        adjacency: Dict[str, Set[str]] = {}
         for rel in self.model.get("relationships", []):
             from_tbl = rel["fromTable"].lower()
             to_tbl = rel["toTable"].lower()
+            adjacency.setdefault(from_tbl, set()).add(to_tbl)
+            adjacency.setdefault(to_tbl, set()).add(from_tbl)
 
-            if from_tbl in fact_set or to_tbl in fact_set:
-                connected.add(from_tbl)
-                connected.add(to_tbl)
+        # BFS from each fact table, stopping at other fact tables
+        connected: Set[str] = set()
+        queue = list(fact_set)
+        visited: Set[str] = set()
+
+        while queue:
+            current = queue.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+
+            # Stop traversal if we hit another domain's fact table
+            if current in stop_tables:
+                continue
+
+            connected.add(current)
+            for neighbor in adjacency.get(current, set()):
+                if neighbor not in visited:
+                    queue.append(neighbor)
 
         return connected
 

@@ -90,7 +90,7 @@ from backend.tools.query_planner import get_planner, ExecutionPlan, PlanStep
 from backend.utils.timing import PipelineTiming
 
 # Import prompts
-from backend.prompts.domain_registry import DOMAIN_REGISTRY
+from schema_extraction.domain_configs import DOMAIN_REGISTRY
 
 # Import native functions
 from backend.native_functions.matcher import match_native_function, resolve_native_function

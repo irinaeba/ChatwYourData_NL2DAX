@@ -6,6 +6,8 @@ Each analyst agent handles DAX generation, execution, and validation
 for a specific domain (transactions, feedback, etc.).
 """
 
+from schema_extraction.domain_configs import DOMAIN_REGISTRY
+
 ANALYST_AGENT_PROMPT_TEMPLATE = """You are a Power BI DAX analyst for the {domain} domain.
 
 You have ONE tool: **run_dax_workflow**
@@ -27,17 +29,10 @@ You have ONE tool: **run_dax_workflow**
 {domain_description}
 """
 
-DOMAIN_DESCRIPTIONS = {
-    "transactions": "Services, applications, SLA, completion time, status, transactions, processing time, cycle time, ADGE entities.",
-    "feedback": "NPS, CES, CSAT, satisfaction, promoters, detractors, passives, customer feedback, survey responses, ratings, scores.",
-    "cases": "total cases, complaint cases, case sla, case csat, contact center cases, case aggregate score, ticket number, case topics",
-    "focus": "area of focus, executive summary, tamm performance",
-}
-
 
 def get_analyst_prompt(domain: str) -> str:
     """Get the system prompt for an analyst agent for the given domain."""
-    desc = DOMAIN_DESCRIPTIONS.get(domain, "General data queries.")
+    desc = DOMAIN_REGISTRY.get(domain, {}).get("description", "General data queries.")
     return ANALYST_AGENT_PROMPT_TEMPLATE.format(
         domain=domain,
         domain_upper=domain.upper(),

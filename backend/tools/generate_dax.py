@@ -60,8 +60,13 @@ def _load_prompt_from_file(filepath: Path, variable_name: str) -> str:
     Dynamically load a prompt from a Python file.
     Always reads fresh from disk to avoid caching issues.
     """
-    spec = importlib.util.spec_from_file_location(filepath.stem, filepath)
+    spec = importlib.util.spec_from_file_location(
+        f"backend.prompts.prompt_generator.{filepath.stem}",
+        filepath,
+        submodule_search_locations=[]
+    )
     module = importlib.util.module_from_spec(spec)
+    module.__package__ = "backend.prompts.prompt_generator"
     spec.loader.exec_module(module)
     return getattr(module, variable_name)
 

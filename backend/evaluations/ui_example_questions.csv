@@ -1,23 +1,40 @@
-﻿How many transactions for Service 'Issue Parking Reservation Permit' in Sep-24?
-How many of these are completed?
-What was the SLA for this service in Sep-24?
-What was the CSAT for this service in Sep-24?
-Which service had the highest CSAT in 2025?
-Which service had the highest CES in Jan-25?
-Which service had the highest NPS in Jan-25?
-What is the Overall CSAT for all Services in TAMM in 2025?
-Which ADGE is negatively impacting the CSAT in Q4-2025?
-What is the CSAT for DMT during 2025?
-Give me the toal CES for 2025
-What are the top 5 entities by CSAT for Q4 2025?
-Which are the top 5 services which have most count of negative feedback and are impacting their respective entities CSAT
-Trend of CSAT monthly from 2025.
-CSAT of which Entity for Jan 25 is less than the average CSAT of these Entities for 2025.
-What is the SLA for DMT for Jan'2025?
-Give me the total SLA for all entities in Jan 25
-give me the top 5 services by SLA in 25
-Give me the monthly trend of transactions in H2 25
-Transactions of which Entities for Jan 25 is less than the average transactions of these Entities for 2025.
-What is the Abandoned Ratio of Cancelled over Completed for following entities: DMT, SCAD, ADAFSA, DOH?
-What is the total CSAT for AI driven Services,
-What are the top 5 AI driven Services by CSAT?
+﻿How many work orders were created in Q1 2025?
+What is the SLA breach rate for work orders in Abu Dhabi City?
+Which contractor has the most work orders assigned?
+Show me the monthly trend of work orders for 2025
+What is the average resolution time for Critical priority work orders?
+Which department has the highest rework rate?
+How many Emergency work orders were created in Al Ain last quarter?
+What is the total actual cost for Corrective work orders in 2025?
+Which region has the most SLA breaches?
+Top 5 asset categories by number of work orders
+How many citizen complaints were received in March 2026?
+What are the top complaint types by volume?
+Which service channel receives the most complaints?
+What is the average citizen satisfaction score by region?
+Show me the monthly trend of complaints for the last 6 months
+Which district has the highest number of Critical severity complaints?
+What percentage of complaints have Negative sentiment?
+What is the average response time for complaints submitted via TAMM Mobile App?
+How many complaints are related to Street Lighting assets?
+Compare complaint volumes between Abu Dhabi City and Al Ain in Q1 2026
+What is the total maintenance cost by entity for 2025?
+Which contractor has the highest total expenditure?
+Show me the cost breakdown between labor, materials, and equipment
+What is the average maintenance cost per work order by type?
+Monthly trend of maintenance costs for the last 12 months
+Which asset category has the highest overhead cost?
+Compare Preventive vs Corrective maintenance costs
+Top 10 most expensive work orders
+What is the total cost for the Roads and Infrastructure Department?
+How do maintenance costs compare between Q1 and Q2 2025?
+What is the total downtime hours by region in 2025?
+Which assets have the longest downtime duration?
+What are the top 5 downtime reasons?
+How many downtime events had Critical public impact?
+Show me the monthly trend of asset downtime
+Which asset category experiences the most frequent outages?
+What is the average downtime duration for Pump Failure events?
+How many downtime events lasted more than 24 hours?
+Compare downtime between Abu Dhabi City and Al Dhafra
+Which department has the most High impact downtime events?

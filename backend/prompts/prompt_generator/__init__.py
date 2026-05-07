@@ -5,13 +5,14 @@ DAX Generator Prompts
 Domain-specific system prompts for DAX query generation.
 """
 
-from .dax_generator_prompt_transactions import DAX_GENERATOR_PROMPT_TRANSACTIONS
-from .dax_generator_prompt_feedback import DAX_GENERATOR_PROMPT_FEEDBACK
-from .dax_generator_prompt_cases import DAX_GENERATOR_PROMPT_CASES
-from .dax_generator_prompt_focus import DAX_GENERATOR_PROMPT_FOCUS
+from .dax_generator_prompt_work_orders import DAX_GENERATOR_PROMPT_WORK_ORDERS
+from .dax_generator_prompt_citizen_complaints import DAX_GENERATOR_PROMPT_CITIZEN_COMPLAINTS
+from .dax_generator_prompt_maintenance_costs import DAX_GENERATOR_PROMPT_MAINTENANCE_COSTS
+from .dax_generator_prompt_downtime import DAX_GENERATOR_PROMPT_DOWNTIME
+
 __all__ = [
-    'DAX_GENERATOR_PROMPT_TRANSACTIONS',
-    'DAX_GENERATOR_PROMPT_FEEDBACK',
-    'DAX_GENERATOR_PROMPT_CASES',
-    'DAX_GENERATOR_PROMPT_FOCUS',
+    'DAX_GENERATOR_PROMPT_WORK_ORDERS',
+    'DAX_GENERATOR_PROMPT_CITIZEN_COMPLAINTS',
+    'DAX_GENERATOR_PROMPT_MAINTENANCE_COSTS',
+    'DAX_GENERATOR_PROMPT_DOWNTIME',
 ]

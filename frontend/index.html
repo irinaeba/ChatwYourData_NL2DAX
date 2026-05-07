@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAMM - Abu Dhabi Government Services Chat Assistant</title>
+    <title>NL to DAX - Data Analytics Assistant</title>
     <!-- MSAL.js for Entra ID authentication -->
     <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
     <!-- Markdown parser -->
@@ -312,9 +312,9 @@
     <!-- Login Screen - shown before authentication -->
     <div id="login-screen" class="login-screen">
         <div class="login-box">
-            <div class="login-logo">🏛️</div>
-            <div class="login-title">TAMM Data Assistant</div>
-            <div class="login-subtitle">Sign in with your organizational account to access Abu Dhabi government services data</div>
+            <div class="login-logo">📊</div>
+            <div class="login-title">Data Analytics Assistant</div>
+            <div class="login-subtitle">Sign in with your organizational account to explore your data using natural language</div>
             <button id="login-btn" class="login-btn" onclick="loginWithPopup()">
                 🔐 Sign in with Microsoft
             </button>
@@ -325,7 +325,7 @@
     <!-- Main Application - hidden until authenticated -->
     <div id="main-app" style="display: none; flex-direction: column; height: 100vh;">
         <div class="header">
-            <h1>TAMM Services Chat Assistant</h1>
+            <h1>Data Analytics Assistant</h1>
             <div class="header-right">
                 <div class="user-info">
                     <div id="user-name" class="user-name"></div>
@@ -338,23 +338,23 @@
         <div class="main-layout">
             <!-- Left sidebar - Welcome panel -->
             <div class="welcome-sidebar">
-                <h2>🏛️ TAMM Data Assistant</h2>
-                <p>Explore Abu Dhabi government services data through natural language queries. Get insights on <strong>transactions</strong> and <strong>customer feedback</strong>.</p>
+                <h2>📊 Data Assistant</h2>
+                <p>Explore your data through natural language queries. Get insights on <strong>operations</strong>, <strong>costs</strong>, and <strong>performance</strong>.</p>
                 
-                <h3 style="color: #4a4a4a; margin-top: 20px; margin-bottom: 10px; font-size: 0.95rem;">📊 Transaction Queries</h3>
-                <p style="font-size: 13px; color: #777; margin-bottom: 8px;">Analyze service volumes, trends, and performance metrics.</p>
+                <h3 style="color: #4a4a4a; margin-top: 20px; margin-bottom: 10px; font-size: 0.95rem;">🔧 Operational Queries</h3>
+                <p style="font-size: 13px; color: #777; margin-bottom: 8px;">Analyze work orders, SLA performance, and asset management.</p>
                 
-                <h3 style="color: #4a4a4a; margin-top: 15px; margin-bottom: 10px; font-size: 0.95rem;">💬 Feedback Analysis</h3>
-                <p style="font-size: 13px; color: #777; margin-bottom: 8px;">Understand customer satisfaction (CSAT) and sentiment across services.</p>
+                <h3 style="color: #4a4a4a; margin-top: 15px; margin-bottom: 10px; font-size: 0.95rem;">📈 Analytics & Trends</h3>
+                <p style="font-size: 13px; color: #777; margin-bottom: 8px;">Understand costs, downtime patterns, and citizen feedback.</p>
                 
                 <h3 style="color: #4a4a4a; margin-top: 25px; margin-bottom: 12px; font-size: 1rem;">Try these examples:</h3>
                 <div class="sample-buttons">
-                    <button class="sample-btn" onclick="askQuestion('What is the total number of transactions?')">📊 Total Transactions</button>
-                    <button class="sample-btn" onclick="askQuestion('Show top 5 services by transaction volume')">🏆 Top Services</button>
-                    <button class="sample-btn" onclick="askQuestion('What is the overall CSAT score?')">⭐ CSAT Score</button>
-                    <button class="sample-btn" onclick="askQuestion('Which services have the highest customer satisfaction?')">😊 Best Rated Services</button>
-                    <button class="sample-btn" onclick="askQuestion('Show monthly transaction trends')">📈 Monthly Trends</button>
-                    <button class="sample-btn" onclick="askQuestion('What is the feedback sentiment breakdown?')">💭 Sentiment Analysis</button>
+                    <button class="sample-btn" onclick="askQuestion('How many work orders by type?')">🔧 Work Orders by Type</button>
+                    <button class="sample-btn" onclick="askQuestion('What is the SLA breach rate by region?')">⚠️ SLA Breach Rate</button>
+                    <button class="sample-btn" onclick="askQuestion('Top 5 contractors by work order volume')">🏆 Top Contractors</button>
+                    <button class="sample-btn" onclick="askQuestion('What is the total maintenance cost by entity?')">💰 Cost by Entity</button>
+                    <button class="sample-btn" onclick="askQuestion('Which assets have the most downtime?')">⏱️ Top Downtime Assets</button>
+                    <button class="sample-btn" onclick="askQuestion('What are the most common complaint types?')">📋 Complaint Types</button>
                 </div>
 
                 <!-- Evaluation Ground Truth Questions -->
@@ -371,7 +371,7 @@
             <div class="conversation-area">
                 <div class="chat-box">
                     <div class="messages" id="messages">
-                        <div class="message bot"><span class="bot-icon">🤖</span><div class="bot-content">Hello! I'm ready to help you query Abu Dhabi government data. Ask me anything!</div></div>
+                        <div class="message bot"><span class="bot-icon">🤖</span><div class="bot-content">Hello! I'm ready to help you explore your data. Ask me anything!</div></div>
                     </div>
                     
                     <div class="input-row">
@@ -388,7 +388,7 @@
     </div>
     
     <div class="footer">
-        &copy; 2026 Abu Dhabi Government. All rights reserved.
+        &copy; 2026 NL to DAX. All rights reserved.
     </div>
     </div> <!-- End of main-app -->
 
@@ -703,7 +703,7 @@
             }
         }
         
-        console.log('TAMM Chat Assistant loaded');
+        console.log('Data Analytics Assistant loaded');
     </script>
     
     <!-- Auth module - must be after MSAL.js -->

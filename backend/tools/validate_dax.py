@@ -37,34 +37,22 @@ from backend.tools.auth import AzureOpenAIConfig, AzureOpenAIAuthProvider, creat
 _project_root = Path(__file__).resolve().parent.parent.parent
 
 
-def _load_prompt_from_file(filepath: Path, variable_name: str) -> str:
+def get_dax_validator_prompt() -> str:
     """
-    Dynamically load a prompt from a Python file.
-    Always reads fresh from disk to avoid caching issues.
+    Get the DAX validator prompt.
+    Loads fresh from disk each time to ensure latest changes are used.
     """
     import importlib.util
-    spec = importlib.util.spec_from_file_location(filepath.stem, filepath)
+    filepath = _project_root / "backend" / "prompts" / "prompt_validator" / "dax_validator_global_instructions.py"
+    spec = importlib.util.spec_from_file_location(
+        "backend.prompts.prompt_validator.dax_validator_global_instructions",
+        filepath,
+        submodule_search_locations=[],
+    )
     module = importlib.util.module_from_spec(spec)
+    module.__package__ = "backend.prompts.prompt_validator"
     spec.loader.exec_module(module)
-    return getattr(module, variable_name)
-
-
-def get_dax_validator_prompt(intent: str) -> str:
-    """
-    Get the DAX validator prompt for the given intent/domain.
-    Loads fresh from disk each time to ensure latest changes are used.
-
-    Convention: file = dax_validator_prompt_{domain}.py
-               var  = DAX_VALIDATOR_PROMPT_{DOMAIN}
-    """
-    domain = intent.strip().lower()
-    filepath = _project_root / "backend" / "prompts" / "prompt_validator" / f"dax_validator_prompt_{domain}.py"
-    variable = f"DAX_VALIDATOR_PROMPT_{domain.upper()}"
-    if not filepath.exists():
-        raise FileNotFoundError(
-            f"No validator prompt for domain '{domain}': expected {filepath}"
-        )
-    return _load_prompt_from_file(filepath, variable)
+    return getattr(module, "DAX_VALIDATOR_PROMPT")
 
 
 load_dotenv()
@@ -105,8 +93,8 @@ class DAXValidator:
     
     async def _validate_async(self, dax_query: str, schema: str, user_query: str, intent: str = "TRANSACTIONS") -> ValidationResult:
         """Async implementation of DAX validation."""
-        # Select prompt based on intent - loads fresh from disk each time
-        validator_prompt = get_dax_validator_prompt(intent)
+        # Load the global validator prompt fresh from disk
+        validator_prompt = get_dax_validator_prompt()
         
         # Format prompt - use 'generated_dax' to match prompt placeholder
         prompt = validator_prompt.format(

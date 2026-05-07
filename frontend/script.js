@@ -1,5 +1,5 @@
 // ============================================================
-// TAMM Chat Assistant - Frontend Logic
+// Data Analytics Chat Assistant - Frontend Logic
 // ============================================================
 
 const API_BASE_URL = '';
@@ -10,7 +10,7 @@ let conversationHistory = [];
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Initializing TAMM Chat Assistant...');
+    console.log('🚀 Initializing Data Analytics Assistant...');
     
     await checkServiceHealth();
     setupEventListeners();
@@ -444,6 +444,48 @@ function addClarificationMessage(message, suggestions) {
 }
 
 // ============================================================
+// Number Formatting for Table Cells
+// ============================================================
+
+function formatCellValue(value, header) {
+    if (!value) return value;
+
+    // Already has % sign (e.g. "39.9%") → round to integer
+    if (/^-?\d+(\.\d+)?%$/.test(value)) {
+        const num = parseFloat(value);
+        return Math.round(num) + '%';
+    }
+
+    // Header hints at percentage (contains "%", "rate", "percent")
+    const headerLower = (header || '').trim().toLowerCase();
+    const isPercentageCol = headerLower.includes('%') || headerLower.includes('rate') || headerLower.includes('percent');
+
+    // Pure number (possibly with existing commas stripped)
+    const cleaned = value.replace(/,/g, '');
+    if (/^-?\d+(\.\d+)?$/.test(cleaned)) {
+        const num = parseFloat(cleaned);
+
+        if (isPercentageCol) {
+            // Values like 0.40 (ratio) → display as 40%
+            if (Math.abs(num) <= 1.0001) {
+                return Math.round(num * 100) + '%';
+            }
+            return Math.round(num) + '%';
+        }
+
+        // Integer values → commas only, no decimals
+        if (Number.isInteger(num)) {
+            return num.toLocaleString('en-US');
+        }
+
+        // Decimal values → 1 decimal place with comma separators
+        return num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    }
+
+    return value;
+}
+
+// ============================================================
 // Markdown to HTML
 // ============================================================
 
@@ -494,8 +536,8 @@ function markdownToHtml(markdown) {
             const cells = lines[i].split('|').filter(cell => cell.trim());
             if (cells.length > 0) {
                 table += '<tr>';
-                cells.forEach(cell => {
-                    table += `<td>${cell.trim()}</td>`;
+                cells.forEach((cell, colIdx) => {
+                    table += `<td>${formatCellValue(cell.trim(), headerCells[colIdx])}</td>`;
                 });
                 table += '</tr>';
             }
@@ -537,4 +579,4 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-console.log('✓ TAMM Chat Assistant loaded');
+console.log('✓ Data Analytics Assistant loaded');

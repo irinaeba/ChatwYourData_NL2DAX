@@ -322,7 +322,7 @@ async function initializePowerBIConnection() {
         // Always re-enable query UI
         if (questionInput) {
             questionInput.disabled = false;
-            questionInput.placeholder = 'Ask a question about TAMM services...';
+            questionInput.placeholder = 'Ask a question about your data...';
             questionInput.focus();
         }
         if (submitBtn) submitBtn.disabled = false;

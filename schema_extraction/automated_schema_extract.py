@@ -4,7 +4,7 @@ Automated Schema Extraction Pipeline (XMLA Endpoint)
 Runs 3 steps in sequence:
   1. extract_schema  – Extract metadata via DAX INFO functions (XMLA / ADOMD.NET)
   2. format_schema_for_prompt – Convert schema JSON to LLM-friendly text
-  3. split_schema – Split into domain-specific schemas (transactions & feedback)
+  3. split_schema – Split into domain-specific schemas
 
 Uses pyadomd + ADOMD.NET for XMLA access, supporting service principal auth.
 No REST API limitations — works with client credentials (no user interaction).
@@ -184,7 +184,8 @@ def main():
     print("This script runs 3 steps:")
     print("  1. Extract metadata via DAX INFO functions (XMLA endpoint)")
     print("  2. Format for LLM consumption")
-    print("  3. Split into domain schemas (transactions & feedback)")
+    domain_names = ", ".join(c["name"] for c in DOMAIN_CONFIGS)
+    print(f"  3. Split into domain schemas: {domain_names}")
     print()
 
     # Load .env

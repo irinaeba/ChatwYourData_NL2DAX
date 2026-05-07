@@ -228,13 +228,23 @@ class DAXExecutor:
 
                 # Handle HTTP errors
                 if resp.status_code != 200:
-                    error_text = resp.text
+                    raw_body = resp.text
+                    print(f"[REST API] Raw error response body: {raw_body[:1000]}")
+                    error_text = raw_body
                     try:
                         error_json = resp.json()
                         error_detail = error_json.get("error", {})
-                        error_text = error_detail.get("message", error_text)
+                        # Power BI REST API may nest error differently
+                        error_text = (
+                            error_detail.get("message")
+                            or error_detail.get("code")
+                            or error_json.get("message")
+                            or raw_body[:500]
+                        )
                     except Exception:
-                        pass
+                        error_text = raw_body[:500]
+                    
+                    print(f"[REST API] Error {resp.status_code}: {error_text}")
 
                     if is_authentication_error(resp.status_code, error_text):
                         print(f"[REST API] Authentication error: {resp.status_code}")
@@ -258,6 +268,21 @@ class DAXExecutor:
 
                 # Parse successful response
                 result_json = resp.json()
+                
+                # Power BI executeQueries may return 200 with errors inside the response body
+                if "error" in result_json:
+                    err = result_json["error"]
+                    error_text = err.get("message") or err.get("code") or str(err)
+                    print(f"[REST API] Error in response body: {error_text}")
+                    return ExecutionResult(success=False, error=f"Power BI error: {error_text}")
+                
+                # Check for errors inside results array
+                results = result_json.get("results", [])
+                if results and "error" in results[0]:
+                    err = results[0]["error"]
+                    error_text = err.get("message") or err.get("code") or str(err)
+                    print(f"[REST API] Error in results[0]: {error_text}")
+                    return ExecutionResult(success=False, error=f"DAX error: {error_text}")
                 return self._parse_response(result_json)
 
             except httpx.TimeoutException:
