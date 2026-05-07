@@ -66,7 +66,53 @@ GENERAL_DAX_RULES = """=== GENERAL DAX RULES ===
 - Never display the categorical values as keys, try to look for a valid english or arabic name column from relevant dim table.
 - When ranking (TOPN) or sorting (ORDER BY) percentage metrics, you MUST generate a raw numeric column (e.g., 'Metric_Value') to use for sorting, alongside the FORMAT() string metric for display.
 - Do not show the sorting column if there is another similar column with the right formatting.
-- Rename the columns appropriately in a user-friendly way before displaying."""
+- Rename the columns appropriately in a user-friendly way before displaying.
+- For CALCULATE expressions inside SUMMARIZECOLUMNS metric definitions, use inline filter predicates directly instead of referencing filter variables. Filter variables are for SUMMARIZECOLUMNS row-level filtering only.
+  BAD:  "Within SLA_Count", CALCULATE(COUNTROWS(fact_work_orders), __SLARespectedFilter)
+  GOOD: "Within SLA_Count", CALCULATE(COUNTROWS(fact_work_orders), fact_work_orders[sla_breached_flag] = FALSE())
+  When generating CALCULATE filters:
+
+1. NEVER pass a filter variable unless it uses KEEPFILTERS and does not contain ALL()
+
+2. ALWAYS prefer inline column filters:
+   CALCULATE(…, fact_table[column] = value)
+
+3. NEVER use:
+   FILTER(ALL(table), …)
+   REMOVEFILTERS()
+   ALL()
+
+4. FILTERS MUST BE:
+   - applied directly on fact table columns
+   - simple boolean expressions (column = value)
+
+5. If grouping exists (SUMMARIZECOLUMNS, visuals, drilldowns),
+   filters MUST preserve context automatically
+
+  """
+
+
+# ============================================================
+# FILTER RULES (MANDATORY)
+# ============================================================
+
+FILTER_RULES = """=== FILTER RULES (MANDATORY) ===
+
+1. NEVER generate:
+   FILTER(ALL(...))
+   REMOVEFILTERS(...)
+   ALL(...)
+
+2. NEVER pass filter variables into CALCULATE unless:
+   KEEPFILTERS(column = value)
+
+3. ALWAYS use:
+   CALCULATE(..., fact_table[column] = value)
+
+4. Filters MUST:
+   - preserve grouping context
+   - be simple boolean expressions
+"""
 
 
 # ============================================================
@@ -170,7 +216,72 @@ EVALUATE
     __Core
 ORDER BY
     'DimDate'[Year] ASC,
-    'DimDate'[Month] ASC"""
+    'DimDate'[Month] ASC
+    
+
+ 4. WHEN GENERATING NEW COLUMNS TO GROUP BY: 
+ 4. WHEN GENERATING NEW COLUMNS TO GROUP BY:
+
+DEFINE
+
+// Step 1: Build base table at correct grain
+// ALWAYS prefer VALUES or SUMMARIZE (dimension only)
+VAR Base =
+    SUMMARIZE(
+        <dimension>,                  // e.g. 'dim_asset_category'
+        <keys>                        // e.g. [asset_category_key], [asset_category_name]
+    )
+
+// Step 2: Add derived grouping column (classification logic)
+VAR Enriched =
+    ADDCOLUMNS(
+        Base,
+        "derived_column",
+            <logic>                   // e.g. SWITCH(TRUE(), CONTAINSSTRING(...))
+    )
+
+// Step 3: Filter only relevant dimension rows
+// NEVER filter fact table here
+VAR Filtered =
+    FILTER(
+        Enriched,
+        <condition>                   // e.g. [derived_column] IN {{"VALUE1","VALUE2"}}
+    )
+
+// Step 4: Add metrics using CALCULATE
+// CRITICAL RULES:
+// - MUST use inline filters (column = value)
+// - MUST NOT use FILTER(ALL(...))
+// - MUST NOT use REMOVEFILTERS()
+// - MUST NOT pass filter variables unless using KEEPFILTERS
+VAR WithMetrics =
+    ADDCOLUMNS(
+        Filtered,
+        "metric",
+            CALCULATE(
+                <aggregation>,        // e.g. SUM('fact_table'[column])
+                <inline_filters>      // e.g. 'dim_date'[year] = 2020
+            )
+    )
+
+// Step 5: Final aggregation
+
+// If using table variables → use GROUPBY
+VAR Result =
+    GROUPBY(
+        WithMetrics,
+        <grouping>,                   // e.g. [derived_column]
+        "metric",
+            SUMX(
+                CURRENTGROUP(),
+                [metric]
+            )
+    )
+
+// Output
+EVALUATE Result
+    
+    """
 
 
 # ============================================================

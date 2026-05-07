@@ -10,462 +10,235 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Chart.js datalabels plugin for displaying values on bars -->
+    <!-- Chart.js datalabels plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { 
-            height: 100vh;
-            overflow: hidden;
-        }
-        body { 
-            font-family: 'Segoe UI', Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            margin: 0;
-            background-attachment: fixed;
-        }
-        
-        /* Login Screen Styles */
-        .login-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #064342 0%, #5d5e68 50%, #064342 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        .login-box {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 16px;
-            padding: 40px 50px;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            max-width: 420px;
-        }
-        .login-logo { font-size: 48px; margin-bottom: 20px; }
-        .login-title { font-size: 24px; font-weight: 600; color: #333; margin-bottom: 8px; }
-        .login-subtitle { font-size: 14px; color: #666; margin-bottom: 30px; }
-        .login-btn {
-            background: #0078d4;
-            color: white;
-            border: none;
-            padding: 14px 28px;
-            font-size: 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            width: 100%;
-            transition: background 0.2s;
-        }
-        .login-btn:hover { background: #106ebe; }
-        .login-btn:disabled { background: #ccc; cursor: not-allowed; }
-        .login-error {
-            color: #d32f2f;
-            font-size: 14px;
-            margin-top: 15px;
-            display: none;
-        }
-        .spinner {
-            width: 18px;
-            height: 18px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            display: inline-block;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        /* Header with user info */
-        .header { 
-            background: linear-gradient(135deg, #064342 0%, #5d5e68 50%, #064342 100%); 
-            color: white; 
-            padding: 15px 20px; 
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0; 
-        }
-        .header h1 { font-size: 1.3rem; font-weight: 600; }
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .user-info {
-            text-align: right;
-            font-size: 13px;
-        }
-        .user-info .user-name { font-weight: 600; }
-        .user-info .user-email { opacity: 0.8; font-size: 12px; }
-        .logout-btn {
-            background: rgba(255,255,255,0.15);
-            color: white;
-            border: 1px solid rgba(255,255,255,0.3);
-            padding: 6px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            display: none;
-        }
-        .logout-btn:hover { background: rgba(255,255,255,0.25); }
-        
-        .main-layout { 
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-            min-height: 0;
-            /* no background needed here now */
-        }
-        
-        /* Left sidebar - Welcome panel */
-        .welcome-sidebar { 
-            width: 320px; 
-            background:hsla(195, 68%, 29%, 0.178); 
-            padding: 25px; 
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1); 
-            overflow-y: auto;
-            flex-shrink: 0;
-            backdrop-filter: blur(10px);
-        }
-        .welcome-sidebar h2 { color: #4a4a4a; margin-bottom: 15px; font-size: 1.3rem; }
-        .welcome-sidebar p { color: #666; margin-bottom: 20px; font-size: 14px; }
-        .welcome-sidebar ul { margin-left: 20px; color: #555; font-size: 14px; }
-        .welcome-sidebar li { margin-bottom: 8px; }
-        
-        .sample-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-        .sample-btn { padding: 12px 16px; background: #5d5e68; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; text-align: left; }
-        .sample-btn:hover { background: #0088B8; }
-
-        /* Evaluation dropdown */
-        .eval-section { margin-top: 25px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 15px; }
-        .eval-section h3 { color: #4a4a4a; margin-bottom: 10px; font-size: 0.95rem; }
-        .eval-select {
-            width: 100%;
-            padding: 10px 12px;
-            font-size: 13px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            background: white;
-            color: #333;
-            cursor: pointer;
-            appearance: auto;
-        }
-        .eval-select:hover { border-color: #0088B8; }
-        .eval-select:focus { outline: none; border-color: #0088B8; box-shadow: 0 0 0 2px rgba(0,136,184,0.2); }
-        .eval-send-btn {
-            margin-top: 8px;
-            width: 100%;
-            padding: 10px;
-            background: #0088B8;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        .eval-send-btn:hover { background: #006d94; }
-        .eval-send-btn:disabled { background: #ccc; cursor: not-allowed; }
-        
-        /* Right side - Conversation area */
-        .conversation-area { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
-            /* can include background image here*/
-            background: linear-gradient(135deg, #064342 0%, #5d5e68 50%, #064342 100%);
-            overflow: hidden;
-            backdrop-filter: blur(6px);
-            min-height: 0;
-        }
-        
-        .chat-box { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
-            padding: 20px; 
-            min-height: 0;
-            overflow: hidden;
-        }
-        
-        .messages { 
-            flex: 1; 
-            overflow-y: auto; 
-            border: none; 
-            border-radius: 8px; 
-            padding: 15px; 
-            margin-bottom: 15px; 
-            background-color: transparent;
-            min-height: 0;
-        }
-        .message { margin-bottom: 15px; padding: 12px; border-radius: 8px; font-size: 1rem; color: #169f9f; }
-        .message.user { background: rgba(219, 216, 216, 0.9); color: #333; margin-left: 20%; }
-        .message.bot { background: rgba(22, 159, 159, 0.1); color: #ffffff; margin-right: 10%; font-size: 1rem; display: flex; gap: 12px; align-items: flex-start; }
-        .bot-icon { font-size: 1.5rem; flex-shrink: 0; }
-        .bot-content { flex: 1; min-width: 0; }
-        .message.loading { background: rgba(204, 203, 201, 0.8); color: #333; display: flex; align-items: center; gap: 10px; }
-        .loading-spinner { 
-            width: 20px; 
-            height: 20px; 
-            border: 3px solid rgba(0, 163, 224, 0.3); 
-            border-top: 3px solid #00A3E0; 
-            border-radius: 50%; 
-            animation: spin 1s linear infinite; 
-            display: inline-block;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* Markdown content styles */
-        .message.bot h3 { color: #ffffff; margin: 16px 0 8px 0; font-size: 1.1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.3); padding-bottom: 4px; }
-        .message.bot h3:first-child { margin-top: 0; }
-        .message.bot p { margin: 8px 0; line-height: 1.6; }
-        .message.bot ul, .message.bot ol { margin: 8px 0 8px 20px; }
-        .message.bot li { margin: 4px 0; }
-        .message.bot table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
-        .message.bot th, .message.bot td { border: 1px solid rgba(22, 159, 159, 0.3); padding: 8px 12px; text-align: left; }
-        .message.bot th { background: rgba(0, 163, 224, 0.1); font-weight: 600; }
-        .message.bot tr:nth-child(even) { background: rgba(22, 159, 159, 0.05); }
-        .message.bot code { background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; color: #ffffff; }
-        .message.bot pre { background: rgba(255, 255, 255, 0.1); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 12px 0; }
-        .message.bot pre code { background: none; padding: 0; font-size: 0.85rem; color: #ffffff; display: block; white-space: pre-wrap; }
-        
-        /* DAX Code Toggle Styles */
-        .dax-toggle { margin-top: 15px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; overflow: hidden; }
-        .dax-toggle-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: rgba(255, 255, 255, 0.08); cursor: pointer; font-size: 0.9rem; color: #a0d2db; transition: background 0.2s; }
-        .dax-toggle-header:hover { background: rgba(255, 255, 255, 0.12); }
-        .dax-toggle-icon { transition: transform 0.3s; font-size: 0.8rem; }
-        .dax-toggle.open .dax-toggle-icon { transform: rotate(90deg); }
-        .dax-toggle-content { display: none; padding: 0; }
-        .dax-toggle.open .dax-toggle-content { display: block; }
-        .dax-toggle-content pre { margin: 0; border-radius: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); }
-        
-        /* Chart container styles */
-        .chart-container { 
-            background: rgba(6, 67, 66, 0.85); 
-            border-radius: 12px; 
-            padding: 25px; 
-            margin: 20px auto;  /* Center the chart */
-            max-width: 800px;
-            min-height: 400px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .chart-container canvas { 
-            max-height: 450px !important; 
-        }
-        
-        .input-row { display: flex; gap: 10px; }
-        .input-row textarea { 
-            flex: 1; 
-            padding: 14px 16px; 
-            background-color: #5d5e68; 
-            color: #ffffff; 
-            font-size: 0.9rem; 
-            width: 100%; 
-            border: none; 
-            border-radius: 12px; 
-            outline: none; 
-            resize: none; 
-        }
-        .input-row textarea::placeholder { color: rgba(255, 255, 255, 0.6); font-size: 0.9rem; }
-        .input-row textarea:focus { outline: none; box-shadow: 0 0 0 2px #00A3E0; }
-        .input-row button { padding: 12px 30px; background: #00A3E0; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
-        .input-row button:hover { background: #0088B8; }
-        .input-row button:disabled { background: #ccc; cursor: not-allowed; }
-        
-        .options { margin-top: 10px; display: flex; gap: 20px; }
-        .options label { display: flex; align-items: center; gap: 5px; color: #666; cursor: pointer; font-size: 14px; }
-        
-        .footer { text-align: center; padding: 15px; color: #888; font-size: 13px; background: white; border-top: 1px solid #eee; }
-
-        /* Responsive - stack on mobile */
-        @media (max-width: 768px) {
-            .main-layout { flex-direction: column; }
-            .welcome-sidebar { width: 100%; max-height: 300px; }
-            .sample-buttons { flex-direction: row; flex-wrap: wrap; }
-            .sample-btn { flex: 1; min-width: 140px; text-align: center; }
-        }
-
-        /* Clarification chips */
-        .clarification-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-        .clarification-chip {
-            display: inline-block; padding: 8px 16px;
-            background: rgba(0, 163, 224, 0.08); border: 1.5px solid #00A3E0;
-            border-radius: 20px; color: #0088B8; font-size: 13px; font-weight: 500;
-            cursor: pointer; transition: all 0.2s ease; text-align: left; line-height: 1.4;
-        }
-        .clarification-chip:hover { background: #00A3E0; color: #fff; }
-        .clarification-chip.chip-selected { background: #00A3E0; color: #fff; border-color: #0088B8; cursor: default; }
-        .clarification-chip.chip-disabled { opacity: 0.45; cursor: default; pointer-events: none; }
-    </style>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Login Screen - shown before authentication -->
+    <!-- Login Screen -->
     <div id="login-screen" class="login-screen">
         <div class="login-box">
-            <div class="login-logo">📊</div>
+            <div class="login-logo">
+                <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
+                    <rect width="48" height="48" rx="12" fill="url(#grad1)"/>
+                    <path d="M14 34V20h4v14h-4zm8 0V14h4v20h-4zm8 0V24h4v10h-4z" fill="white"/>
+                    <defs><linearGradient id="grad1" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#f472b6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+                </svg>
+            </div>
             <div class="login-title">Data Analytics Assistant</div>
             <div class="login-subtitle">Sign in with your organizational account to explore your data using natural language</div>
             <button id="login-btn" class="login-btn" onclick="loginWithPopup()">
-                🔐 Sign in with Microsoft
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M9.5 0H0v9.5h9.5V0zm10.5 0H10.5v9.5H20V0zM9.5 10.5H0V20h9.5v-9.5zm10.5 0H10.5V20H20v-9.5z"/></svg>
+                Sign in with Microsoft
             </button>
             <div id="login-error" class="login-error"></div>
         </div>
     </div>
-    
-    <!-- Main Application - hidden until authenticated -->
-    <div id="main-app" style="display: none; flex-direction: column; height: 100vh;">
-        <div class="header">
-            <h1>Data Analytics Assistant</h1>
-            <div class="header-right">
-                <div class="user-info">
-                    <div id="user-name" class="user-name"></div>
-                    <div id="user-email" class="user-email"></div>
+
+    <!-- Main Application -->
+    <div id="main-app" class="app-shell" style="display: none;">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="12" fill="url(#grad2)"/>
+                        <path d="M14 34V20h4v14h-4zm8 0V14h4v20h-4zm8 0V24h4v10h-4z" fill="white"/>
+                        <defs><linearGradient id="grad2" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#f472b6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+                    </svg>
                 </div>
-                <button id="logout-btn" class="logout-btn" onclick="logout()">Sign Out</button>
+                <span class="sidebar-title">Contoso</span>
             </div>
-        </div>
-        
-        <div class="main-layout">
-            <!-- Left sidebar - Welcome panel -->
-            <div class="welcome-sidebar">
-                <h2>📊 Data Assistant</h2>
-                <p>Explore your data through natural language queries. Get insights on <strong>operations</strong>, <strong>costs</strong>, and <strong>performance</strong>.</p>
-                
-                <h3 style="color: #4a4a4a; margin-top: 20px; margin-bottom: 10px; font-size: 0.95rem;">🔧 Operational Queries</h3>
-                <p style="font-size: 13px; color: #777; margin-bottom: 8px;">Analyze work orders, SLA performance, and asset management.</p>
-                
-                <h3 style="color: #4a4a4a; margin-top: 15px; margin-bottom: 10px; font-size: 0.95rem;">📈 Analytics & Trends</h3>
-                <p style="font-size: 13px; color: #777; margin-bottom: 8px;">Understand costs, downtime patterns, and citizen feedback.</p>
-                
-                <h3 style="color: #4a4a4a; margin-top: 25px; margin-bottom: 12px; font-size: 1rem;">Try these examples:</h3>
-                <div class="sample-buttons">
-                    <button class="sample-btn" onclick="askQuestion('How many work orders by type?')">🔧 Work Orders by Type</button>
-                    <button class="sample-btn" onclick="askQuestion('What is the SLA breach rate by region?')">⚠️ SLA Breach Rate</button>
-                    <button class="sample-btn" onclick="askQuestion('Top 5 contractors by work order volume')">🏆 Top Contractors</button>
-                    <button class="sample-btn" onclick="askQuestion('What is the total maintenance cost by entity?')">💰 Cost by Entity</button>
-                    <button class="sample-btn" onclick="askQuestion('Which assets have the most downtime?')">⏱️ Top Downtime Assets</button>
-                    <button class="sample-btn" onclick="askQuestion('What are the most common complaint types?')">📋 Complaint Types</button>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">Sample Questions</div>
+
+                <div class="question-group">
+                    <div class="question-group-header" onclick="this.parentElement.classList.toggle('open')">
+                        <span class="question-group-icon">▶</span>
+                        <span>Native Functions</span>
+                    </div>
+                    <div class="question-group-items">
+                        <button class="nav-btn" onclick="askQuestion('Show me the monthly trend of complaints for the last 6 months')">
+                            <span class="nav-text">Monthly complaint trend (6 months)</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('How many work orders were created in Q1 2025?')">
+                            <span class="nav-text">Work orders in Q1 2025</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('How many work orders by type?')">
+                            <span class="nav-text">Work orders by type</span>
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Evaluation Ground Truth Questions -->
-                <div class="eval-section">
-                    <h3>📋 Evaluations – Ground Truth Questions</h3>
-                    <select id="evalQuestionSelect" class="eval-select">
-                        <option value="">-- Select a question --</option>
-                    </select>
-                    <button id="evalSendBtn" class="eval-send-btn" onclick="sendEvalQuestion()" disabled>▶ Ask Selected Question</button>
+                <div class="question-group">
+                    <div class="question-group-header" onclick="this.parentElement.classList.toggle('open')">
+                        <span class="question-group-icon">▶</span>
+                        <span>Low-Moderate Complexity</span>
+                    </div>
+                    <div class="question-group-items">
+                        <button class="nav-btn" onclick="askQuestion('What is the average resolution time for complaint-driven work orders vs non-complaint ones?')">
+                            <span class="nav-text">Resolution time: complaint vs non-complaint</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Which issue types have the highest cost impact?')">
+                            <span class="nav-text">Issue types with highest cost</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Give me the monthly trend of work orders completed within SLA during the past 6 months')">
+                            <span class="nav-text">Monthly trend of WOs within SLA (6 months)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="question-group">
+                    <div class="question-group-header" onclick="this.parentElement.classList.toggle('open')">
+                        <span class="question-group-icon">▶</span>
+                        <span>Complex Questions</span>
+                    </div>
+                    <div class="question-group-items">
+                        <button class="nav-btn" onclick="askQuestion('Which issue types drive the highest maintenance cost?')">
+                            <span class="nav-text">Issue types driving highest maintenance cost</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Which service channel has the highest satisfaction score between app or call centers?')">
+                            <span class="nav-text">Service channel satisfaction: app vs call center</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Which areas have the highest infrastructure stress?')">
+                            <span class="nav-text">Areas with highest infrastructure stress</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Are we becoming more efficient over time in terms of SLA?')">
+                            <span class="nav-text">SLA efficiency over time</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="question-group">
+                    <div class="question-group-header" onclick="this.parentElement.classList.toggle('open')">
+                        <span class="question-group-icon">▶</span>
+                        <span>Guided Data Analysis - Run in Sequence</span>
+                    </div>
+                    <div class="question-group-items">
+                        <button class="nav-btn" onclick="askQuestion('What are the different asset categories?')">
+                            <span class="nav-text">1. Different asset categories</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('I need you to categorize mobility related versus infrastructure versus Others categories')">
+                            <span class="nav-text">2. Categorize mobility vs infrastructure vs others</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Now give me the comparison in total spent last year between mobility versus infrastructure assets')">
+                            <span class="nav-text">3. Compare spend: mobility vs infrastructure</span>
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar" id="user-avatar">U</div>
+                    <div class="user-details">
+                        <div id="user-name" class="user-name"></div>
+                        <div id="user-email" class="user-email"></div>
+                    </div>
+                </div>
+                <button id="logout-btn" class="logout-btn" onclick="logout()" style="display:none;">Sign Out</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="greeting">
+                    <h1>Data Analytics Assistant</h1>
+                    <p>Ask questions about your operational data in natural language</p>
+                </div>
+                <div class="top-bar-right">
+                    <div class="status-pill">
+                        <span class="status-dot" id="status-dot"></span>
+                        <span id="status-label">Connecting...</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Chat Area -->
+            <div class="chat-area">
+                <div class="messages" id="messages">
+                    <div class="message bot">
+                        <span class="bot-icon">
+                            <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
+                                <rect width="48" height="48" rx="12" fill="url(#grad3)"/>
+                                <path d="M14 34V20h4v14h-4zm8 0V14h4v20h-4zm8 0V24h4v10h-4z" fill="white"/>
+                                <defs><linearGradient id="grad3" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#f472b6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+                            </svg>
+                        </span>
+                        <div class="bot-content">Hello! I'm ready to help you explore your data. Ask me anything about work orders, maintenance costs, downtime, or citizen complaints.</div>
+                    </div>
                 </div>
             </div>
-            
-            <!-- Right side - Conversation area -->
-            <div class="conversation-area">
-                <div class="chat-box">
-                    <div class="messages" id="messages">
-                        <div class="message bot"><span class="bot-icon">🤖</span><div class="bot-content">Hello! I'm ready to help you explore your data. Ask me anything!</div></div>
-                    </div>
-                    
-                    <div class="input-row">
-                        <textarea id="question" rows="2" placeholder="Type your question here..."></textarea>
-                        <button id="sendBtn" onclick="sendQuestion()">Send</button>
-                    </div>
-                    
-                    <div class="options">
-                        <label><input type="checkbox" id="showDax"> Show DAX Query</label>
-                        <label><input type="checkbox" id="showExplanation"> Include Explanation</label>
-                    </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <div class="input-options">
+                    <label class="option-toggle">
+                        <input type="checkbox" id="showDax">
+                        <span>Show DAX</span>
+                    </label>
+                    <label class="option-toggle">
+                        <input type="checkbox" id="showExplanation">
+                        <span>Explanation</span>
+                    </label>
+                </div>
+                <div class="input-row">
+                    <textarea id="question" rows="1" placeholder="Ask a question about your data..."></textarea>
+                    <button id="sendBtn" onclick="sendQuestion()" class="send-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
             </div>
-        </div>
+        </main>
     </div>
-    
-    <div class="footer">
-        &copy; 2026 NL to DAX. All rights reserved.
-    </div>
-    </div> <!-- End of main-app -->
 
     <script>
-        // Load ground truth evaluation questions
-        async function loadEvalQuestions() {
-            try {
-                const resp = await fetch('/evaluations/questions');
-                if (!resp.ok) return;
-                const data = await resp.json();
-                const select = document.getElementById('evalQuestionSelect');
-                const btn = document.getElementById('evalSendBtn');
-                data.questions.forEach((q, i) => {
-                    const opt = document.createElement('option');
-                    opt.value = q;
-                    opt.textContent = q;
-                    select.appendChild(opt);
-                });
-                select.addEventListener('change', () => {
-                    btn.disabled = !select.value;
-                });
-            } catch (e) {
-                console.warn('Could not load eval questions:', e);
-            }
-        }
-        loadEvalQuestions();
-
-        function sendEvalQuestion() {
-            const select = document.getElementById('evalQuestionSelect');
-            if (select.value) {
-                askQuestion(select.value);
-            }
-        }
-
         function askQuestion(q) {
             document.getElementById('question').value = q;
             sendQuestion();
         }
-        
+
         async function sendQuestion() {
             const input = document.getElementById('question');
             const btn = document.getElementById('sendBtn');
             const messages = document.getElementById('messages');
             const question = input.value.trim();
-            
-            if (!question) {
-                alert('Please enter a question');
-                return;
-            }
-            
-            // Add user message (using DOM methods to preserve existing chart canvases)
+
+            if (!question) return;
+
+            // User message
             const userMsg = document.createElement('div');
             userMsg.className = 'message user';
             userMsg.textContent = question;
             messages.appendChild(userMsg);
-            
-            // Add loading indicator
+
+            // Loading indicator
             const loadingMsg = document.createElement('div');
-            loadingMsg.className = 'message loading';
+            loadingMsg.className = 'message bot loading';
             loadingMsg.id = 'loading';
-            loadingMsg.innerHTML = '<div class="loading-spinner"></div> Thinking...';
+            loadingMsg.innerHTML = '<span class="bot-icon"><svg width="20" height="20" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="12" fill="url(#gradL)"/><path d="M14 34V20h4v14h-4zm8 0V14h4v20h-4zm8 0V24h4v10h-4z" fill="white"/><defs><linearGradient id="gradL" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#f472b6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></span><div class="bot-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
             messages.appendChild(loadingMsg);
             messages.scrollTop = messages.scrollHeight;
-            
+
             input.value = '';
+            input.style.height = 'auto';
             btn.disabled = true;
-            
+
             try {
-                // Get access token for API call (null in dev mode)
                 const accessToken = await getAccessToken();
-                
-                // Build headers - only include Authorization if we have a token
                 const headers = { 'Content-Type': 'application/json' };
                 if (accessToken) {
                     headers['Authorization'] = 'Bearer ' + accessToken;
                 }
-                
+
                 const response = await fetch('/query', {
                     method: 'POST',
                     headers: headers,
@@ -475,31 +248,23 @@
                         include_explanation: document.getElementById('showExplanation').checked
                     })
                 });
-                
+
                 const data = await response.json();
                 document.getElementById('loading').remove();
-                
-                // Debug: Log chart data
-                console.log('API Response:', data);
-                console.log('chart_config:', data.chart_config);
-                console.log('chart_type:', data.chart_type);
-                
+
                 const chartId = 'chart_' + Date.now();
-                
-                // Build bot message using DOM methods to preserve existing chart canvases
                 const botMsg = document.createElement('div');
                 botMsg.className = 'message bot';
-                
+
                 const botIcon = document.createElement('span');
                 botIcon.className = 'bot-icon';
-                botIcon.textContent = '🤖';
+                botIcon.innerHTML = '<svg width="20" height="20" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="12" fill="url(#gradR)"/><path d="M14 34V20h4v14h-4zm8 0V14h4v20h-4zm8 0V24h4v10h-4z" fill="white"/><defs><linearGradient id="gradR" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#f472b6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>';
                 botMsg.appendChild(botIcon);
-                
+
                 const botContent = document.createElement('div');
                 botContent.className = 'bot-content';
-                
+
                 if (data.success) {
-                    // Check if clarification is needed BEFORE rendering normal results
                     if (data.clarification_needed && data.clarification_suggestions) {
                         const clarMsg = data.clarification_message || 'Could you clarify your question?';
                         const clarP = document.createElement('p');
@@ -514,14 +279,12 @@
                             chip.className = 'clarification-chip';
                             chip.textContent = suggestion;
                             chip.addEventListener('click', () => {
-                                // Disable all chips after click
                                 chipsDiv.querySelectorAll('.clarification-chip').forEach(c => {
                                     c.disabled = true;
                                     c.classList.add('chip-disabled');
                                 });
                                 chip.classList.add('chip-selected');
                                 chip.classList.remove('chip-disabled');
-                                // Submit the selected suggestion
                                 document.getElementById('question').value = suggestion;
                                 sendQuestion();
                             });
@@ -529,187 +292,263 @@
                         });
                         botContent.appendChild(chipsDiv);
                     } else {
-                    // Add chart container if chart_config exists
-                    if (data.chart_config && data.chart_type !== 'none') {
-                        const chartContainer = document.createElement('div');
-                        chartContainer.className = 'chart-container';
-                        const canvas = document.createElement('canvas');
-                        canvas.id = chartId;
-                        chartContainer.appendChild(canvas);
-                        botContent.appendChild(chartContainer);
+                        // Chart
+                        if (data.chart_config && data.chart_type !== 'none') {
+                            const chartContainer = document.createElement('div');
+                            chartContainer.className = 'chart-container';
+                            const canvas = document.createElement('canvas');
+                            canvas.id = chartId;
+                            chartContainer.appendChild(canvas);
+                            botContent.appendChild(chartContainer);
+                        }
+
+                        // Formatted answer
+                        let formattedContent = data.formatted_answer || 'Query completed successfully.';
+
+                        // Extract execution details section (make it collapsible)
+                        let executionDetails = '';
+                        const detailsMatch = formattedContent.match(/\n\n---\n\*\*Execution Details:\*\*([\s\S]*)$/);
+                        if (detailsMatch) {
+                            executionDetails = detailsMatch[1].trim();
+                            formattedContent = formattedContent.replace(detailsMatch[0], '');
+                        }
+
+                        // Remove "### Explanation" if it only says "Query returned 1 row(s)."
+                        formattedContent = formattedContent.replace(
+                            /###\s*Explanation:\s*\n+- Query returned 1 row\(s\)\.\s*$/,
+                            ''
+                        );
+
+                        // Format inline numbers in the answer text
+                        formattedContent = formatInlineNumbers(formattedContent);
+
+                        const replyDiv = document.createElement('div');
+                        replyDiv.innerHTML = marked.parse(formattedContent);
+                        formatTableCells(replyDiv);
+                        botContent.appendChild(replyDiv);
+
+                        // Collapsible execution details
+                        if (executionDetails) {
+                            const detailsToggle = document.createElement('div');
+                            detailsToggle.className = 'dax-toggle';
+                            detailsToggle.innerHTML = `
+                                <div class="dax-toggle-header" onclick="this.parentElement.classList.toggle('open')">
+                                    <span class="dax-toggle-icon">▶</span>
+                                    <span>Execution Details</span>
+                                </div>
+                                <div class="dax-toggle-content">
+                                    ${marked.parse(executionDetails)}
+                                </div>
+                            `;
+                            botContent.appendChild(detailsToggle);
+                        }
+
+                        // Metadata
+                        const metaP = document.createElement('p');
+                        metaP.className = 'meta';
+                        let metaParts = [];
+                        if (data.rows_returned !== null && data.rows_returned !== undefined) {
+                            metaParts.push('📊 Rows: ' + data.rows_returned);
+                        }
+                        if (data.dax_generation_ttft !== null && data.dax_generation_ttft !== undefined &&
+                            data.dax_generation_ttlt !== null && data.dax_generation_ttlt !== undefined) {
+                            const genTime = (data.dax_generation_ttlt - data.dax_generation_ttft).toFixed(2);
+                            metaParts.push('⏱️ Gen ' + genTime + 's | TTLT ' + data.dax_generation_ttlt.toFixed(2) + 's');
+                        }
+                        if (metaParts.length > 0) {
+                            metaP.innerHTML = '<small>' + metaParts.join(' &nbsp;|&nbsp; ') + '</small>';
+                            botContent.appendChild(metaP);
+                        }
+
+                        // DAX toggle
+                        if (data.raw_dax) {
+                            const daxToggle = document.createElement('div');
+                            daxToggle.className = 'dax-toggle';
+                            daxToggle.innerHTML = `
+                                <div class="dax-toggle-header" onclick="this.parentElement.classList.toggle('open')">
+                                    <span class="dax-toggle-icon">▶</span>
+                                    <span>View DAX Query</span>
+                                </div>
+                                <div class="dax-toggle-content">
+                                    <pre><code>${escapeHtml(data.raw_dax)}</code></pre>
+                                </div>
+                            `;
+                            botContent.appendChild(daxToggle);
+                        }
                     }
-                    
-                    // Parse markdown for formatted answer
-                    let formattedContent = data.formatted_answer || 'Query completed successfully.';
-                    const replyDiv = document.createElement('div');
-                    replyDiv.innerHTML = marked.parse(formattedContent);
-                    botContent.appendChild(replyDiv);
-                    
-                    // Always show metadata section
-                    const metaP = document.createElement('p');
-                    metaP.className = 'meta';
-                    let metaParts = [];
-                    
-                    // Add row count if available
-                    if (data.rows_returned !== null && data.rows_returned !== undefined) {
-                        metaParts.push('📊 Rows: ' + data.rows_returned);
-                    }
-                    
-                    // Add TTFT/TTLT/Generation timing if available
-                    if (data.dax_generation_ttft !== null && data.dax_generation_ttft !== undefined && 
-                        data.dax_generation_ttlt !== null && data.dax_generation_ttlt !== undefined) {
-                        const genTime = (data.dax_generation_ttlt - data.dax_generation_ttft).toFixed(2);
-                        metaParts.push('⏱️ DAX Gen: TTFT ' + data.dax_generation_ttft.toFixed(2) + 's, Gen ' + genTime + 's, TTLT ' + data.dax_generation_ttlt.toFixed(2) + 's');
-                    }
-                    
-                    if (metaParts.length > 0) {
-                        metaP.innerHTML = '<small>' + metaParts.join(' | ') + '</small>';
-                        botContent.appendChild(metaP);
-                    }
-                    
-                    // Add collapsible DAX code toggle if raw_dax exists
-                    if (data.raw_dax) {
-                        const daxToggle = document.createElement('div');
-                        daxToggle.className = 'dax-toggle';
-                        daxToggle.innerHTML = `
-                            <div class="dax-toggle-header" onclick="this.parentElement.classList.toggle('open')">
-                                <span class="dax-toggle-icon">▶</span>
-                                <span>🔍 Click here for generated DAX code</span>
-                            </div>
-                            <div class="dax-toggle-content">
-                                <pre><code>${escapeHtml(data.raw_dax)}</code></pre>
-                            </div>
-                        `;
-                        botContent.appendChild(daxToggle);
-                    }
-                    } // end of else (normal success rendering, not clarification)
                 } else {
-                    botContent.innerHTML = '❌ Error: ' + escapeHtml(data.error || 'Unknown error');
+                    botContent.innerHTML = '<div class="error-msg">❌ ' + escapeHtml(data.error || 'Unknown error') + '</div>';
                 }
-                
+
                 botMsg.appendChild(botContent);
                 messages.appendChild(botMsg);
                 messages.scrollTop = messages.scrollHeight;
-                
-                // Render chart if config exists
+
                 if (data.chart_config && data.chart_type !== 'none') {
                     renderChart(chartId, data.chart_config);
                 }
-                
+
             } catch (error) {
                 const loadingEl = document.getElementById('loading');
                 if (loadingEl) loadingEl.remove();
-                
-                // Add error message using DOM methods
                 const errorMsg = document.createElement('div');
                 errorMsg.className = 'message bot';
-                errorMsg.innerHTML = '<span class="bot-icon">🤖</span><div class="bot-content">❌ Failed to connect. Please try again.</div>';
+                errorMsg.innerHTML = '<span class="bot-icon"><svg width="20" height="20" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="12" fill="#ef4444"/><path d="M24 14v12M24 30v2" stroke="white" stroke-width="3" stroke-linecap="round"/></svg></span><div class="bot-content"><div class="error-msg">Failed to connect. Please try again.</div></div>';
                 messages.appendChild(errorMsg);
                 console.error('Error:', error);
             }
-            
+
             btn.disabled = false;
             input.focus();
         }
-        
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        
-        // Allow Enter to send (Ctrl+Enter for newline)
+
+        // Number formatting for table cells
+        function formatCellValue(value, header) {
+            if (!value) return value;
+
+            // Already has % sign (e.g. "39.9%") → round to integer
+            if (/^-?\d+(\.\d+)?%$/.test(value)) {
+                const num = parseFloat(value);
+                return Math.round(num) + '%';
+            }
+
+            // Header hints at percentage
+            const headerLower = (header || '').trim().toLowerCase();
+            const isPercentageCol = headerLower.includes('%') || headerLower.includes('rate') || headerLower.includes('percent');
+
+            // Pure number
+            const cleaned = value.replace(/,/g, '');
+            if (/^-?\d+(\.\d+)?$/.test(cleaned)) {
+                const num = parseFloat(cleaned);
+
+                if (isPercentageCol) {
+                    if (Math.abs(num) <= 1.0001) {
+                        return Math.round(num * 100) + '%';
+                    }
+                    return Math.round(num) + '%';
+                }
+
+                if (Number.isInteger(num)) {
+                    return num.toLocaleString('en-US');
+                }
+
+                return num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            }
+
+            return value;
+        }
+
+        function formatTableCells(container) {
+            const tables = container.querySelectorAll('table');
+            tables.forEach(table => {
+                const headers = [];
+                table.querySelectorAll('thead th').forEach(th => headers.push(th.textContent));
+                table.querySelectorAll('tbody tr').forEach(row => {
+                    row.querySelectorAll('td').forEach((td, idx) => {
+                        td.textContent = formatCellValue(td.textContent.trim(), headers[idx]);
+                    });
+                });
+            });
+        }
+
+        function formatInlineNumbers(text) {
+            // Format decimal numbers in running text (not inside markdown table rows or code)
+            // Match numbers with decimals that have more than 1 decimal place
+            return text.replace(/(?<!\|)\b(\d+\.\d{2,})\b(?!\|)/g, (match) => {
+                const num = parseFloat(match);
+                if (isNaN(num)) return match;
+                if (Number.isInteger(num)) return num.toLocaleString('en-US');
+                return num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            });
+        }
+
+        // Enter to send, Shift+Enter for newline
         document.getElementById('question').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendQuestion();
             }
         });
-        
-        // Render Chart.js chart
+
+        // Auto-resize textarea
+        document.getElementById('question').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Render Chart.js
         function renderChart(canvasId, chartConfig) {
             try {
                 const canvas = document.getElementById(canvasId);
-                if (!canvas) {
-                    console.error('Canvas not found:', canvasId);
-                    return;
-                }
-                
-                // Register datalabels plugin if available
+                if (!canvas) return;
+
                 if (typeof ChartDataLabels !== 'undefined') {
                     Chart.register(ChartDataLabels);
                 }
-                
-                // Set up datalabels formatter if placeholder exists
-                if (chartConfig.options && 
-                    chartConfig.options.plugins && 
+
+                if (chartConfig.options &&
+                    chartConfig.options.plugins &&
                     chartConfig.options.plugins.datalabels &&
                     chartConfig.options.plugins.datalabels.formatter === '__DATALABEL_FORMATTER__') {
                     chartConfig.options.plugins.datalabels.formatter = function(value) {
-                        // Format number with commas and 2 decimal places if needed
                         if (typeof value === 'number') {
-                            if (Number.isInteger(value)) {
-                                return value.toLocaleString();
-                            }
+                            if (Number.isInteger(value)) return value.toLocaleString();
                             return value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
                         }
                         return value;
                     };
                 }
-                
-                // Apply dark theme styling - white text on transparent background
+
+                // Dark theme chart styling
                 chartConfig.options = chartConfig.options || {};
                 chartConfig.options.plugins = chartConfig.options.plugins || {};
-                
-                // Title styling - white text
+
                 if (chartConfig.options.plugins.title) {
-                    chartConfig.options.plugins.title.color = '#ffffff';
+                    chartConfig.options.plugins.title.color = '#e2e8f0';
                 }
-                
-                // Legend styling - white text
                 chartConfig.options.plugins.legend = chartConfig.options.plugins.legend || {};
                 chartConfig.options.plugins.legend.labels = chartConfig.options.plugins.legend.labels || {};
-                chartConfig.options.plugins.legend.labels.color = '#ffffff';
-                
-                // Datalabels styling - white text
+                chartConfig.options.plugins.legend.labels.color = '#cbd5e1';
+
                 if (chartConfig.options.plugins.datalabels) {
-                    chartConfig.options.plugins.datalabels.color = '#ffffff';
+                    chartConfig.options.plugins.datalabels.color = '#e2e8f0';
                 }
-                
-                // Axis styling - white text
+
                 chartConfig.options.scales = chartConfig.options.scales || {};
                 if (chartConfig.options.scales.x) {
                     chartConfig.options.scales.x.ticks = chartConfig.options.scales.x.ticks || {};
-                    chartConfig.options.scales.x.ticks.color = '#ffffff';
+                    chartConfig.options.scales.x.ticks.color = '#94a3b8';
                     chartConfig.options.scales.x.title = chartConfig.options.scales.x.title || {};
-                    chartConfig.options.scales.x.title.color = '#ffffff';
+                    chartConfig.options.scales.x.title.color = '#cbd5e1';
                     chartConfig.options.scales.x.grid = chartConfig.options.scales.x.grid || {};
-                    chartConfig.options.scales.x.grid.color = 'rgba(255, 255, 255, 0.2)';
+                    chartConfig.options.scales.x.grid.color = 'rgba(148, 163, 184, 0.1)';
                 }
                 if (chartConfig.options.scales.y) {
                     chartConfig.options.scales.y.ticks = chartConfig.options.scales.y.ticks || {};
-                    chartConfig.options.scales.y.ticks.color = '#ffffff';
+                    chartConfig.options.scales.y.ticks.color = '#94a3b8';
                     chartConfig.options.scales.y.title = chartConfig.options.scales.y.title || {};
-                    chartConfig.options.scales.y.title.color = '#ffffff';
+                    chartConfig.options.scales.y.title.color = '#cbd5e1';
                     chartConfig.options.scales.y.grid = chartConfig.options.scales.y.grid || {};
-                    chartConfig.options.scales.y.grid.color = 'rgba(255, 255, 255, 0.2)';
+                    chartConfig.options.scales.y.grid.color = 'rgba(148, 163, 184, 0.1)';
                 }
-                
+
                 const ctx = canvas.getContext('2d');
                 new Chart(ctx, chartConfig);
-                console.log('Chart rendered:', chartConfig.type);
             } catch (error) {
                 console.error('Failed to render chart:', error);
             }
         }
-        
-        console.log('Data Analytics Assistant loaded');
     </script>
-    
-    <!-- Auth module - must be after MSAL.js -->
+
+    <!-- Auth module -->
     <script src="auth.js"></script>
     <script>
-        // Initialize authentication when page loads
         document.addEventListener('DOMContentLoaded', function() {
             initializeAuth();
         });

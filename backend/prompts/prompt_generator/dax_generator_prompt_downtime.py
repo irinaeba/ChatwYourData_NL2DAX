@@ -11,6 +11,7 @@ from .dax_generator_global_instructions import (
     EXECUTION_RULES,
     SCHEMA_RULES,
     GENERAL_DAX_RULES,
+    FILTER_RULES,
     MANDATORY_QUERY_STRUCTURE,
     DATE_HANDLING_RULES,
     RESULT_SHAPE_RULES,
@@ -46,6 +47,7 @@ Primary tables typically involved:
 
 DOWNTIME_SPECIFIC_RULES = """
 When asked about downtime, you should always calculate the average downtime, unless specifically asked about total downtime.
+Infrastructure specific asset categories: "Road Infrastructure", "Internal Roads", "Pavements and Sidewalks", "Bridges and Underpasses"
 """
 
 
@@ -72,6 +74,8 @@ Return ONLY the JSON matching the schema. No explanations outside JSON.
 {RESULT_SHAPE_RULES}
 
 {GENERAL_DAX_RULES}
+
+{FILTER_RULES}
 
 {OUTPUT_FORMAT}
 

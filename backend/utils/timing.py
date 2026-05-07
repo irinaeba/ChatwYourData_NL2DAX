@@ -133,7 +133,14 @@ class PipelineTiming:
     # ---- Serialisation -----------------------------------------------------
     def to_markdown(self) -> str:
         """Build a human-readable markdown timing block for the chat answer."""
-        lines = ["\n\n---\n**Execution Timing:**"]
+        # Collect unique domains
+        domains_used = list(dict.fromkeys(
+            d for d in self.step_domains.values() if d
+        ))
+        domains_str = ", ".join(domains_used) if domains_used else "—"
+
+        lines = ["\n\n---\n**Execution Details:**"]
+        lines.append(f"- Domains: {domains_str}")
         lines.append(
             f"- LLM Planner: {self.planner_elapsed:.2f}s "
             f"({self.planner_steps_count} step(s))"

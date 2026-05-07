@@ -277,8 +277,8 @@ function onLogout() {
  */
 async function initializePowerBIConnection() {
     // Disable query UI while connecting
-    const questionInput = document.getElementById('question-input');
-    const submitBtn = document.getElementById('submit-btn');
+    const questionInput = document.getElementById('question');
+    const submitBtn = document.getElementById('sendBtn');
     const statusDot = document.getElementById('status-dot');
     const statusLabel = document.getElementById('status-label');
     
@@ -287,7 +287,7 @@ async function initializePowerBIConnection() {
         questionInput.placeholder = 'Connecting to Power BI...';
     }
     if (submitBtn) submitBtn.disabled = true;
-    if (statusDot) statusDot.className = 'dot loading';
+    if (statusDot) statusDot.className = 'status-dot';
     if (statusLabel) statusLabel.textContent = 'Connecting...';
     
     try {
@@ -306,17 +306,17 @@ async function initializePowerBIConnection() {
                 console.warn('[WARN] Power BI init warning:', result.warning);
             }
             // Connection ready — enable query UI
-            if (statusDot) statusDot.className = 'dot ready';
+            if (statusDot) statusDot.className = 'status-dot ready';
             if (statusLabel) statusLabel.textContent = 'Ready';
         } else {
             console.warn('[WARN] Power BI init failed:', response.status, await response.text());
             // Still enable UI — will connect on first query (slower)
-            if (statusDot) statusDot.className = 'dot ready';
+            if (statusDot) statusDot.className = 'status-dot ready';
             if (statusLabel) statusLabel.textContent = 'Ready';
         }
     } catch (error) {
         console.warn('[WARN] Power BI init error (will retry on first query):', error.message);
-        if (statusDot) statusDot.className = 'dot ready';
+        if (statusDot) statusDot.className = 'status-dot ready';
         if (statusLabel) statusLabel.textContent = 'Ready';
     } finally {
         // Always re-enable query UI
@@ -341,7 +341,7 @@ function hideLoginProgress() {
     const btn = document.getElementById('login-btn');
     if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '🔐 Sign in with Microsoft';
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M9.5 0H0v9.5h9.5V0zm10.5 0H10.5v9.5H20V0zM9.5 10.5H0V20h9.5v-9.5zm10.5 0H10.5V20H20v-9.5z"/></svg> Sign in with Microsoft';
     }
 }
 
@@ -384,10 +384,12 @@ function updateUserInfo(account) {
     const userNameEl = document.getElementById('user-name');
     const userEmailEl = document.getElementById('user-email');
     const logoutBtn = document.getElementById('logout-btn');
+    const avatarEl = document.getElementById('user-avatar');
     
     if (userNameEl) userNameEl.textContent = account.name || 'User';
     if (userEmailEl) userEmailEl.textContent = account.username || '';
     if (logoutBtn) logoutBtn.style.display = 'inline-block';
+    if (avatarEl) avatarEl.textContent = (account.name || 'U').charAt(0).toUpperCase();
 }
 
 function clearUserInfo() {

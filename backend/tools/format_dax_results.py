@@ -307,8 +307,10 @@ Do NOT include DAX query. Do NOT omit any domain's results."""
             if row_count > MAX_TABLE_DISPLAY_ROWS:
                 table += f"\n\n*...showing {MAX_TABLE_DISPLAY_ROWS} of {row_count} rows*"
 
-        # -- Explanation bullets --
-        explanation = f"- Query returned {row_count} row(s)."
+        # -- Explanation bullets (skip for single-row results) --
+        explanation = ""
+        if row_count > 1:
+            explanation = f"- Query returned {row_count} row(s)."
 
         formatted = f"""### Answer:
 
@@ -317,7 +319,9 @@ Do NOT include DAX query. Do NOT omit any domain's results."""
 ### Results:
 
 {table}
-
+"""
+        if explanation:
+            formatted += f"""
 ### Explanation:
 
 {explanation}

@@ -28,7 +28,7 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
         "planner_description": "Work orders, maintenance tasks, repairs, inspections, SLA compliance, resolution time, contractors, asset maintenance",
         "fact_tables": ["fact_work_orders"],
         "extra_tables": [],              # additional tables to always include
-        "measure_folders": [],
+        "measure_folders": ["RESOLUTION_METRICS"],
         "output_prefix": "schema_work_orders",
     },
     {

@@ -11,6 +11,7 @@ from .dax_generator_global_instructions import (
     EXECUTION_RULES,
     SCHEMA_RULES,
     GENERAL_DAX_RULES,
+    FILTER_RULES,
     MANDATORY_QUERY_STRUCTURE,
     DATE_HANDLING_RULES,
     RESULT_SHAPE_RULES,
@@ -72,6 +73,8 @@ Return ONLY the JSON matching the schema. No explanations outside JSON.
 {RESULT_SHAPE_RULES}
 
 {GENERAL_DAX_RULES}
+
+{FILTER_RULES}
 
 {OUTPUT_FORMAT}
 

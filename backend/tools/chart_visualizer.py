@@ -403,15 +403,55 @@ class ChartVisualizer:
         if measure_col_idx is None:
             measure_col_idx = self._find_measure_column(columns, exclude_idx=dimension_col_idx)
         
-        # Sort data by date dimension
-        sorted_data = sorted(data, key=lambda row: str(row[dimension_col_idx]) if dimension_col_idx < len(row) else "")
+        # Detect year + month columns for combined labels
+        year_col_idx = None
+        month_col_idx = None
+        month_name_col_idx = None
+        cols_lower = [c.lower() for c in columns]
         
-        # Extract labels and values
-        labels = [str(row[dimension_col_idx]) for row in sorted_data if dimension_col_idx < len(row)]
+        for idx, cl in enumerate(cols_lower):
+            if cl in ('year',) or cl.endswith('[year]'):
+                year_col_idx = idx
+            elif cl in ('month',) or cl.endswith('[month]'):
+                month_col_idx = idx
+            elif 'month_name' in cl or 'monthname' in cl or cl in ('month_name',):
+                month_name_col_idx = idx
+        
+        use_year_month = year_col_idx is not None and (month_col_idx is not None or month_name_col_idx is not None)
+        
+        # Sort data by year+month if available, otherwise by dimension
+        if use_year_month:
+            sort_key_idx = month_col_idx if month_col_idx is not None else month_name_col_idx
+            sorted_data = sorted(data, key=lambda row: (
+                int(row[year_col_idx]) if year_col_idx < len(row) and row[year_col_idx] is not None else 0,
+                int(row[sort_key_idx]) if sort_key_idx < len(row) and row[sort_key_idx] is not None and str(row[sort_key_idx]).isdigit() else str(row[sort_key_idx]) if sort_key_idx < len(row) else ""
+            ))
+        else:
+            sorted_data = sorted(data, key=lambda row: str(row[dimension_col_idx]) if dimension_col_idx < len(row) else "")
+        
+        # Build labels: prefer "MonthName Year" format when year+month columns exist
+        if use_year_month:
+            labels = []
+            for row in sorted_data:
+                year_val = str(row[year_col_idx]) if year_col_idx < len(row) else ""
+                if month_name_col_idx is not None and month_name_col_idx < len(row) and row[month_name_col_idx]:
+                    month_val = str(row[month_name_col_idx])
+                    # Shorten month name to 3 chars if longer
+                    if len(month_val) > 3:
+                        month_val = month_val[:3]
+                    labels.append(f"{month_val} {year_val}")
+                elif month_col_idx is not None and month_col_idx < len(row):
+                    labels.append(f"{int(row[month_col_idx]):02d}/{year_val}")
+                else:
+                    labels.append(year_val)
+            dimension_name = "Month"
+        else:
+            labels = [str(row[dimension_col_idx]) for row in sorted_data if dimension_col_idx < len(row)]
+            dimension_name = self._clean_column_name(chart_metadata.dimension or columns[dimension_col_idx])
+        
         values = [self._to_number(row[measure_col_idx]) if measure_col_idx < len(row) else 0 for row in sorted_data]
         
         metric_name = chart_metadata.metric_name or columns[measure_col_idx] if measure_col_idx < len(columns) else "Value"
-        dimension_name = self._clean_column_name(chart_metadata.dimension or columns[dimension_col_idx])
         
         # Determine if we should show datalabels (only for 7 or fewer values)
         show_datalabels = len(values) <= 7
