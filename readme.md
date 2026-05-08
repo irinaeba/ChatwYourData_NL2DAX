@@ -88,7 +88,7 @@ The frontend uses MSAL.js to authenticate users. The backend then exchanges the 
      ```
      api://<your-client-id>
      ```
-     Example: `api://f3621d5a-4572-4770-9550-d156f5793b20`
+     Example: `api://h5627f5a-4572-6643-9550-d176543550` #faked client_id 
    - Click **Save**
 
 #### Add the `access_as_user` Scope
