@@ -15,8 +15,6 @@ workflows, schema splitting, and schema loading will pick it up automatically.
 """
 
 from typing import Dict, Any, List
-
-
 DOMAIN_CONFIGS: List[Dict[str, Any]] = [
     {
         "name": "work_orders",
@@ -25,11 +23,24 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
             "This schema contains only tables, relationships, and measures\n"
             "related to fact_work_orders (any type of maintenance work)."
         ),
-        "planner_description": "Work orders, maintenance tasks, repairs, inspections, SLA compliance, resolution time, contractors, asset maintenance",
+        "planner_description": "Work orders, maintenance tasks, repairs, SLA compliance, resolution time, contractors, asset maintenance",
         "fact_tables": ["fact_work_orders"],
-        "extra_tables": [],              # additional tables to always include
-        "measure_folders": ["RESOLUTION_METRICS"],
+        "extra_tables": [],
+        "measure_folders": ["WORK_ORDERS", "ASSET_HEALTH"],
         "output_prefix": "schema_work_orders",
+    },
+    {
+        "name": "inspections",
+        "label": "INSPECTIONS SCHEMA",
+        "description": (
+            "This schema contains only tables, relationships, and measures\n"
+            "related to fact_asset_inspections (asset inspection activities)."
+        ),
+        "planner_description": "Asset inspections, risk scoring, defect tracking, inspection scheduling, follow-up actions, overdue inspections",
+        "fact_tables": ["fact_asset_inspections"],
+        "extra_tables": [],
+        "measure_folders": ["INSPECTIONS"],
+        "output_prefix": "schema_inspections",
     },
     {
         "name": "citizen_complaints",
@@ -41,7 +52,7 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
         "planner_description": "Citizen complaints, public grievances, complaint categories, resolution status, response time, service channels",
         "fact_tables": ["fact_citizen_complaints"],
         "extra_tables": [],
-        "measure_folders": [],
+        "measure_folders": ["CITIZEN_COMPLAINTS"],
         "output_prefix": "schema_complaints",
     },
     {
@@ -53,8 +64,8 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
         ),
         "planner_description": "Maintenance costs, budgets, expenditure, cost breakdowns by asset, department, region, and contractor",
         "fact_tables": ["fact_maintenance_costs"],
-        "extra_tables": [],              # additional tables to always include
-        "measure_folders": [],
+        "extra_tables": [],
+        "measure_folders": ["MAINTENANCE_COSTS"],
         "output_prefix": "schema_maintenance_costs",
     },
     {
@@ -66,8 +77,8 @@ DOMAIN_CONFIGS: List[Dict[str, Any]] = [
         ),
         "planner_description": "Asset downtime, outages, availability, mean time to repair (MTTR), downtime causes, impact assessment",
         "fact_tables": ["fact_asset_downtime"],
-        "extra_tables": [],              # additional tables to always include
-        "measure_folders": [],
+        "extra_tables": [],
+        "measure_folders": ["ASSET_DOWNTIME"],
         "output_prefix": "schema_asset_downtime",
     },
     # To add a new domain:

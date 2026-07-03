@@ -79,14 +79,32 @@
                         <span>Low-Moderate Complexity</span>
                     </div>
                     <div class="question-group-items">
-                        <button class="nav-btn" onclick="askQuestion('What is the average resolution time for complaint-driven work orders vs non-complaint ones?')">
-                            <span class="nav-text">Resolution time: complaint vs non-complaint</span>
+                        <button class="nav-btn" onclick="askQuestion('What is the inspection pass rate by region?')">
+                            <span class="nav-text">Inspection pass rate by region</span>
                         </button>
-                        <button class="nav-btn" onclick="askQuestion('Which issue types have the highest cost impact?')">
-                            <span class="nav-text">Issue types with highest cost</span>
+                        <button class="nav-btn" onclick="askQuestion('How many inspections are currently overdue?')">
+                            <span class="nav-text">Overdue inspections count</span>
                         </button>
-                        <button class="nav-btn" onclick="askQuestion('Give me the monthly trend of work orders completed within SLA during the past 6 months')">
-                            <span class="nav-text">Monthly trend of WOs within SLA (6 months)</span>
+                        <button class="nav-btn" onclick="askQuestion('What is the average risk score for Safety inspections vs Routine ones?')">
+                            <span class="nav-text">Risk score: Safety vs Routine inspections</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Which asset categories have the most inspection failures?')">
+                            <span class="nav-text">Asset categories with most inspection failures</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('What percentage of assets are IoT-enabled by region?')">
+                            <span class="nav-text">IoT-enabled assets by region</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('What is the average cost variance percentage for Emergency work orders?')">
+                            <span class="nav-text">Cost variance for Emergency work orders</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Which contractors have the highest total maintenance expenditure?')">
+                            <span class="nav-text">Contractors with highest maintenance spend</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('What is the labor cost ratio vs materials cost ratio for Corrective maintenance?')">
+                            <span class="nav-text">Labor vs materials ratio (Corrective)</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('What is the average asset age by asset category?')">
+                            <span class="nav-text">Average asset age by category</span>
                         </button>
                     </div>
                 </div>
@@ -97,17 +115,26 @@
                         <span>Complex Questions</span>
                     </div>
                     <div class="question-group-items">
-                        <button class="nav-btn" onclick="askQuestion('Which issue types drive the highest maintenance cost?')">
-                            <span class="nav-text">Issue types driving highest maintenance cost</span>
+                        <button class="nav-btn" onclick="askQuestion('Do assets with high risk scores above 70 have higher maintenance costs than those with low scores?')">
+                            <span class="nav-text">High risk score assets vs maintenance cost</span>
                         </button>
-                        <button class="nav-btn" onclick="askQuestion('Which service channel has the highest satisfaction score between app or call centers?')">
-                            <span class="nav-text">Service channel satisfaction: app vs call center</span>
+                        <button class="nav-btn" onclick="askQuestion('Compare the SLA breach rate for work orders triggered by citizen complaints vs those from IoT sensor alerts')">
+                            <span class="nav-text">SLA breach: complaints vs IoT alerts</span>
                         </button>
-                        <button class="nav-btn" onclick="askQuestion('Which areas have the highest infrastructure stress?')">
-                            <span class="nav-text">Areas with highest infrastructure stress</span>
+                        <button class="nav-btn" onclick="askQuestion('For assets with Critical condition rating, what is the total downtime hours and maintenance cost in the last 12 months?')">
+                            <span class="nav-text">Critical assets: downtime + cost (12 months)</span>
                         </button>
-                        <button class="nav-btn" onclick="askQuestion('Are we becoming more efficient over time in terms of SLA?')">
-                            <span class="nav-text">SLA efficiency over time</span>
+                        <button class="nav-btn" onclick="askQuestion('Which departments have both a high inspection fail rate above 20% and above-average maintenance costs?')">
+                            <span class="nav-text">Depts with high fail rate + high costs</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Compare average resolution time and cost for work orders sourced from citizen complaints vs field inspections vs IoT alerts')">
+                            <span class="nav-text">Resolution time by source channel comparison</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('Which regions have the worst combination of SLA breach rate, downtime hours, and citizen satisfaction score?')">
+                            <span class="nav-text">Worst regions: SLA + downtime + satisfaction</span>
+                        </button>
+                        <button class="nav-btn" onclick="askQuestion('For contractors with more than 100 work orders, rank them by cost variance percentage and rework rate')">
+                            <span class="nav-text">Contractor ranking: cost variance + rework</span>
                         </button>
                     </div>
                 </div>
