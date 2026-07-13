@@ -336,6 +336,122 @@ The application will be available at `http://localhost:8000`.
 
 ---
 
+## Environment Setup (Quick Start)
+
+Follow these steps to set up the application from scratch.
+
+### 1. Create `.env` file
+
+Copy the template and fill in your values:
+
+```bash
+cp env.template .env
+```
+
+Required variables:
+
+```env
+TENANT_ID=<your-azure-ad-tenant-id>
+
+# Power BI App Registration
+CLIENT_ID_POWERBI=<power-bi-app-client-id>
+CLIENT_SECRET_POWERBI=<power-bi-app-client-secret>
+API_SCOPE=api://<power-bi-app-client-id>/access_as_user
+
+# Schema Extraction Service Principal (can be same as Power BI app)
+CLIENT_ID_POWERBI_SCHEMA_EXTRACTION=<schema-extraction-client-id>
+CLIENT_SECRET_POWERBI_SCHEMA_EXTRACTION=<schema-extraction-client-secret>
+
+# Azure OpenAI
+CLIENT_ID_OPENAI=<openai-app-client-id>
+CLIENT_SECRET_OPENAI=<openai-app-client-secret>
+AZURE_OPENAI_ENDPOINT=https://<your-resource>.cognitiveservices.azure.com
+AZURE_OPENAI_DEPLOYMENT=<your-deployment-name>
+AZURE_OPENAI_API_VERSION=2025-04-01-preview
+
+# LLM Provider Toggle ("azure" or "compass")
+LLM_PROVIDER=azure
+
+# Power BI Workspace / Semantic Model
+WORKSPACE_NAME=<your-workspace-name>
+WORKSPACE_ID=<your-workspace-guid>
+DATABASE_NAME=<your-semantic-model-name>
+DATASET_ID=<your-dataset-guid>
+```
+
+### 2. Configure Domain Schema Extraction
+
+Edit `schema_extraction/domain_configs.py` to match your semantic model's domain structure.
+
+This file defines how the full schema is split into domain-specific prompts. Each domain config specifies:
+
+- Which fact table(s) belong to the domain
+- Which dimension tables to include
+- Output file prefix and description
+
+> **Note:** This is already configured for the demo data (`SM_SyntheticData_DEMO`). Update it when connecting to your own model.
+
+### 3. Run Schema Extraction
+
+Extract the schema from your Power BI semantic model via the XMLA endpoint:
+
+```bash
+python schema_extraction/automated_schema_extract.py --save-json
+```
+
+This will:
+
+- Connect to Power BI via XMLA using the `CLIENT_ID_POWERBI_SCHEMA_EXTRACTION` credentials
+- Extract all tables, columns, measures, and relationships
+- Save the full schema as JSON and formatted text
+- Split the schema into domain-specific files under `cache/schema/`
+
+Output files:
+
+```text
+cache/schema/
+├── schema_pack_<date>.json        # Full schema (JSON)
+├── schema_pack_<date>.txt         # Full schema (formatted text)
+├── schema_work_orders.txt         # Domain: work orders
+├── schema_complaints.txt          # Domain: citizen complaints
+├── schema_maintenance_costs.txt   # Domain: maintenance costs
+└── schema_asset_downtime.txt      # Domain: asset downtime
+```
+
+> **Prerequisites:** Requires Windows with the ADOMD.NET DLL (`lib/net45/` or `lib/netcore/`), `pyadomd`, and XMLA read enabled on the workspace.
+
+### 4. Build and Run with Docker
+
+```bash
+# Build the container
+docker compose up --build -d
+
+# Verify it is healthy (~30s for first startup)
+docker ps
+curl http://localhost:8000/health
+
+# Open http://localhost:8000
+```
+
+The Docker container:
+
+- Uses Python 3.12-slim with a multi-stage build
+- Loads `.env` at runtime (never baked into the image)
+- Exposes port **8000**
+- Includes a health check that pings `/health` every 30 seconds
+- Copies `backend/`, `frontend/`, `cache/`, and `schema_extraction/` into the image
+
+Common commands:
+
+```bash
+docker logs nltodax-app -f
+docker compose down
+docker compose up -d --build
+docker compose restart
+```
+
+---
+
 ## Running with Docker (Recommended)
 
 Docker is the easiest way to get the application running. No Python, virtual environment, or local dependency installation is required.
@@ -389,6 +505,22 @@ docker compose restart
 - The `cache/` directory is mounted as a volume so schema files persist across rebuilds.
 - The container exposes port **8000**, the same as local development.
 - A built-in health check pings `/health` every 30 seconds.
+
+---
+
+## Troubleshooting
+
+### Authentication Errors
+
+- Ensure all app registrations have the correct permissions.
+- Verify that client secrets have not expired.
+- Check that the Azure OpenAI app has the Cognitive Services role assigned.
+
+### XMLA Connection Issues
+
+- Verify that XMLA read/write is enabled on the workspace.
+- Ensure the user has the appropriate permissions on the semantic model.
+- Check that the `ADOMD_DLL` path is correct.
 
 ---
 
