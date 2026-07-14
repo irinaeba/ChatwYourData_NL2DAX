@@ -40,19 +40,29 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 def get_dax_validator_prompt() -> str:
     """
     Get the DAX validator prompt.
-    Loads fresh from disk each time to ensure latest changes are used.
+    Loads from storage backend (local filesystem or Azure Blob).
     """
+    import os
     import importlib.util
-    filepath = _project_root / "backend" / "prompts" / "prompt_validator" / "dax_validator_global_instructions.py"
-    spec = importlib.util.spec_from_file_location(
-        "backend.prompts.prompt_validator.dax_validator_global_instructions",
-        filepath,
-        submodule_search_locations=[],
-    )
-    module = importlib.util.module_from_spec(spec)
-    module.__package__ = "backend.prompts.prompt_validator"
-    spec.loader.exec_module(module)
-    return getattr(module, "DAX_VALIDATOR_PROMPT")
+
+    if os.environ.get("STORAGE_BACKEND", "local") == "azure":
+        from backend.storage import get_storage_backend
+        storage = get_storage_backend()
+        content = storage.get_prompt("prompt_validator/dax_validator_global_instructions.py")
+        namespace = {}
+        exec(content, namespace)
+        return namespace["DAX_VALIDATOR_PROMPT"]
+    else:
+        filepath = _project_root / "backend" / "prompts" / "prompt_validator" / "dax_validator_global_instructions.py"
+        spec = importlib.util.spec_from_file_location(
+            "backend.prompts.prompt_validator.dax_validator_global_instructions",
+            filepath,
+            submodule_search_locations=[],
+        )
+        module = importlib.util.module_from_spec(spec)
+        module.__package__ = "backend.prompts.prompt_validator"
+        spec.loader.exec_module(module)
+        return getattr(module, "DAX_VALIDATOR_PROMPT")
 
 
 load_dotenv()

@@ -92,6 +92,9 @@ from backend.utils.timing import PipelineTiming
 # Import prompts
 from schema_extraction.domain_configs import DOMAIN_REGISTRY
 
+# Import storage abstraction
+from backend.storage import get_storage_backend
+
 # Import native functions
 from backend.native_functions.matcher import match_native_function, resolve_native_function
 
@@ -788,14 +791,12 @@ def run_pipeline_sync(
 
 def _run_analyst(workflow, shared: Dict, user_question: str, intent: str, conversation_history: List[ConversationTurn] = None) -> str:
     """Run an analyst workflow and return JSON result string."""
-    # Load schema for this domain
-    schema_file = DOMAIN_REGISTRY[intent]["schema_file"]
-    schema_path = project_root / schema_file
-
+    # Load schema for this domain via storage abstraction
+    storage = get_storage_backend()
     try:
-        schema_content = schema_path.read_text(encoding="utf-8")
+        schema_content = storage.get_schema(intent)
     except FileNotFoundError:
-        return json.dumps({"success": False, "error": f"Schema file not found: {schema_file}"})
+        return json.dumps({"success": False, "error": f"Schema not found for domain: {intent}"})
 
     # Get access token: prefer side-channel (survives across multiple analyst calls),
     # fallback to workflow state

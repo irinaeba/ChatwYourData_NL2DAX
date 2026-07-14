@@ -71,22 +71,45 @@ def _load_prompt_from_file(filepath: Path, variable_name: str) -> str:
     return getattr(module, variable_name)
 
 
+def _load_prompt_from_content(content: str, variable_name: str) -> str:
+    """
+    Execute prompt file content (from storage backend) and extract the variable.
+    Used when prompts are loaded from Azure Blob Storage.
+    """
+    namespace = {}
+    exec(content, namespace)
+    if variable_name not in namespace:
+        raise ValueError(f"Variable '{variable_name}' not found in prompt content")
+    return namespace[variable_name]
+
+
 def get_dax_generator_prompt(intent: str) -> str:
     """
     Get the DAX generator prompt for the given intent/domain.
-    Loads fresh from disk each time to ensure latest changes are used.
+    Loads from storage backend (local filesystem or Azure Blob).
 
     Convention: file = dax_generator_prompt_{domain}.py
                var  = DAX_GENERATOR_PROMPT_{DOMAIN}
     """
+    import os
+    from backend.storage import get_storage_backend
+
     domain = intent.strip().lower()
-    filepath = _project_root / "backend" / "prompts" / "prompt_generator" / f"dax_generator_prompt_{domain}.py"
     variable = f"DAX_GENERATOR_PROMPT_{domain.upper()}"
-    if not filepath.exists():
-        raise FileNotFoundError(
-            f"No generator prompt for domain '{domain}': expected {filepath}"
-        )
-    return _load_prompt_from_file(filepath, variable)
+
+    # Use storage backend in production, local file loading in dev
+    if os.environ.get("STORAGE_BACKEND", "local") == "azure":
+        storage = get_storage_backend()
+        prompt_path = f"prompt_generator/dax_generator_prompt_{domain}.py"
+        content = storage.get_prompt(prompt_path)
+        return _load_prompt_from_content(content, variable)
+    else:
+        filepath = _project_root / "backend" / "prompts" / "prompt_generator" / f"dax_generator_prompt_{domain}.py"
+        if not filepath.exists():
+            raise FileNotFoundError(
+                f"No generator prompt for domain '{domain}': expected {filepath}"
+            )
+        return _load_prompt_from_file(filepath, variable)
 
 
 load_dotenv()

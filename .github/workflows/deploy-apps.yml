@@ -1,0 +1,95 @@
+name: Build & Deploy Apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.py'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'admin_portal/**'
+      - 'Dockerfile'
+      - 'requirements.txt'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: acrnltodaxprod
+  RESOURCE_GROUP: rg-nltodax-prod
+  MAIN_APP_NAME: ca-nltodax-prod
+  ADMIN_APP_NAME: ca-nltodax-prod-admin
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build & Push Main App
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/nltodax-app:${{ github.sha }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/nltodax-app:latest .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/nltodax-app --all-tags
+
+      - name: Build & Push Admin Portal
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/nltodax-admin:${{ github.sha }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/nltodax-admin:latest \
+                       -f admin_portal/Dockerfile admin_portal/
+          docker push ${{ env.ACR_NAME }}.azurecr.io/nltodax-admin --all-tags
+
+  deploy-main:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Main App
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name ${{ env.MAIN_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image ${{ env.ACR_NAME }}.azurecr.io/nltodax-app:${{ github.sha }}
+
+  deploy-admin:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Admin Portal
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name ${{ env.ADMIN_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image ${{ env.ACR_NAME }}.azurecr.io/nltodax-admin:${{ github.sha }}

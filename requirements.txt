@@ -10,6 +10,7 @@ agent-framework==1.0.0b260130
 # Azure Identity
 azure-identity>=1.13.0
 azure-core>=1.30.0
+azure-storage-blob>=12.19.0
 
 # Semantic Kernel (Azure OpenAI integration)
 semantic-kernel>=1.0.0

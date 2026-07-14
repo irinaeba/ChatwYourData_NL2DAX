@@ -33,7 +33,7 @@ The workflow architecture:
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 import csv
@@ -328,6 +328,19 @@ async def health_check() -> HealthResponse:
         initialized=app_state.initialized,
         timestamp=datetime.now().isoformat()
     )
+
+
+@app.post("/admin/reload")
+async def admin_reload():
+    """
+    Invalidate storage caches so the app picks up new prompts/schemas.
+    Called by the Admin Portal after deploying a new version.
+    """
+    from backend.storage import get_storage_backend
+    storage = get_storage_backend()
+    storage.invalidate_cache()
+    logger.info("Storage cache invalidated via /admin/reload")
+    return {"status": "ok", "message": "Cache invalidated, new versions will be loaded on next request"}
 
 
 @app.get("/status", response_model=StatusResponse)
@@ -743,22 +756,28 @@ async def serve_script():
 async def http_exception_handler(request, exc):
     """Handle HTTP exceptions."""
     logger.error(f"HTTP Exception: {exc.status_code} - {exc.detail}")
-    return {
-        "success": False,
-        "error": exc.detail,
-        "status_code": exc.status_code
-    }
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": exc.detail,
+            "status_code": exc.status_code,
+        },
+    )
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
     """Handle general exceptions."""
     logger.error(f"Unhandled Exception: {str(exc)}")
-    return {
-        "success": False,
-        "error": "An unexpected error occurred. Please check the server logs.",
-        "status_code": 500
-    }
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "An unexpected error occurred. Please check the server logs.",
+            "status_code": 500,
+        },
+    )
 
 
 # ============================================================

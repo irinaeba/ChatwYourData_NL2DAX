@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NLtoDAX Admin Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: #16213e;
+            border-bottom: 1px solid #0f3460;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            color: #e94560;
+        }
+
+        .header .status {
+            font-size: 0.85rem;
+            color: #4ecca3;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #16213e;
+            border-right: 1px solid #0f3460;
+            padding: 1rem 0;
+            overflow-y: auto;
+        }
+
+        .sidebar h3 {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+        }
+
+        .sidebar .nav-item {
+            padding: 0.7rem 1.2rem;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .sidebar .nav-item:hover {
+            background: #1a1a2e;
+            border-left-color: #e94560;
+        }
+
+        .sidebar .nav-item.active {
+            background: #1a1a2e;
+            border-left-color: #e94560;
+            color: #fff;
+        }
+
+        .content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .panel {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .panel.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h2 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: #fff;
+        }
+
+        .version-list {
+            list-style: none;
+        }
+
+        .version-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.7rem 1rem;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            transition: background 0.2s;
+        }
+
+        .version-list li:hover {
+            background: #1a1a2e;
+        }
+
+        .version-list .version-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .version-list .badge {
+            background: #4ecca3;
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-primary:hover { background: #d63851; }
+
+        .btn-secondary {
+            background: #0f3460;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover { background: #1a4a7a; }
+
+        .btn-success {
+            background: #4ecca3;
+            color: #000;
+        }
+
+        .btn-success:hover { background: #3db890; }
+
+        .btn-sm {
+            padding: 0.3rem 0.7rem;
+            font-size: 0.75rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .editor-container {
+            margin-top: 1rem;
+        }
+
+        .editor-tabs {
+            display: flex;
+            gap: 2px;
+            border-bottom: 1px solid #0f3460;
+            margin-bottom: 0;
+        }
+
+        .editor-tab {
+            padding: 0.5rem 1rem;
+            background: #0f3460;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .editor-tab.active {
+            background: #1e1e1e;
+            color: #fff;
+        }
+
+        .editor-area {
+            width: 100%;
+            min-height: 500px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #0f3460;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            padding: 1rem;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            resize: vertical;
+            tab-size: 4;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown select {
+            padding: 0.5rem 1rem;
+            background: #0f3460;
+            color: #e0e0e0;
+            border: 1px solid #1a4a7a;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { background: #4ecca3; color: #000; }
+        .toast.error { background: #e94560; color: #fff; }
+        .toast.info { background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a7a; }
+
+        .extraction-status {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+        }
+
+        .extraction-status.running {
+            background: #1a4a7a;
+            border: 1px solid #2a6ab0;
+        }
+
+        .extraction-status.idle {
+            background: #0f3460;
+            border: 1px solid #1a4a7a;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #4ecca3;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>⚙️ NLtoDAX Admin Portal</h1>
+        <span class="status" id="connection-status">Connecting...</span>
+    </header>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <h3>Prompts</h3>
+            <div class="nav-item active" data-panel="prompts">📝 Manage Prompts</div>
+            
+            <h3>Schemas</h3>
+            <div class="nav-item" data-panel="schemas">📊 Manage Schemas</div>
+            <div class="nav-item" data-panel="extraction">🔄 Schema Extraction</div>
+        </nav>
+
+        <main class="content">
+            <!-- Prompts Panel -->
+            <section class="panel active" id="panel-prompts">
+                <div class="card">
+                    <div class="toolbar">
+                        <h2>Prompt Versions</h2>
+                        <div class="actions">
+                            <button class="btn btn-primary" onclick="createNewPromptVersion()">+ New Version</button>
+                        </div>
+                    </div>
+                    <ul class="version-list" id="prompt-versions-list"></ul>
+                </div>
+
+                <div class="card" id="prompt-editor-card" style="display:none;">
+                    <div class="toolbar">
+                        <h2>Editing: <span id="prompt-editing-version"></span></h2>
+                        <div class="actions">
+                            <button class="btn btn-success" onclick="savePromptVersion()">💾 Save as New Version</button>
+                            <button class="btn btn-primary" onclick="deployPromptVersion()">🚀 Deploy Live</button>
+                        </div>
+                    </div>
+                    <div class="editor-tabs" id="prompt-editor-tabs"></div>
+                    <textarea class="editor-area" id="prompt-editor" spellcheck="false"></textarea>
+                </div>
+            </section>
+
+            <!-- Schemas Panel -->
+            <section class="panel" id="panel-schemas">
+                <div class="card">
+                    <div class="toolbar">
+                        <h2>Schema Versions</h2>
+                    </div>
+                    <ul class="version-list" id="schema-versions-list"></ul>
+                </div>
+
+                <div class="card" id="schema-editor-card" style="display:none;">
+                    <div class="toolbar">
+                        <h2>Viewing: <span id="schema-editing-version"></span></h2>
+                        <div class="actions">
+                            <button class="btn btn-success" onclick="saveSchemaVersion()">💾 Save as New Version</button>
+                            <button class="btn btn-primary" onclick="deploySchemaVersion()">🚀 Deploy Live</button>
+                        </div>
+                    </div>
+                    <div class="editor-tabs" id="schema-editor-tabs"></div>
+                    <textarea class="editor-area" id="schema-editor" spellcheck="false"></textarea>
+                </div>
+            </section>
+
+            <!-- Extraction Panel -->
+            <section class="panel" id="panel-extraction">
+                <div class="card">
+                    <h2>Schema Extraction</h2>
+                    <p style="margin-bottom:1rem;color:#888;">
+                        Trigger automated schema extraction from the Power BI semantic model.
+                        The process extracts metadata, formats it for LLM consumption, and splits into domain schemas.
+                    </p>
+                    <button class="btn btn-primary" id="btn-extract" onclick="triggerExtraction()">
+                        🔄 Run Schema Extraction
+                    </button>
+                    <div class="extraction-status idle" id="extraction-status">
+                        <strong>Status:</strong> Idle — No extraction in progress
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_BASE = '';  // Same origin in production
+
+        // ─── State ──────────────────────────────────────────
+        let currentPromptFiles = {};
+        let currentPromptVersion = null;
+        let currentPromptTab = null;
+
+        let currentSchemaFiles = {};
+        let currentSchemaVersion = null;
+        let currentSchemaTab = null;
+
+        // ─── Navigation ─────────────────────────────────────
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                item.classList.add('active');
+                document.getElementById(`panel-${item.dataset.panel}`).classList.add('active');
+            });
+        });
+
+        // ─── Toast ──────────────────────────────────────────
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // ─── API Calls ──────────────────────────────────────
+        async function api(method, path, body = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(`${API_BASE}${path}`, opts);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: res.statusText }));
+                throw new Error(err.detail || 'Request failed');
+            }
+            return res.json();
+        }
+
+        // ─── Prompt Management ──────────────────────────────
+        async function loadPromptVersions() {
+            try {
+                const data = await api('GET', '/api/prompts/versions');
+                const list = document.getElementById('prompt-versions-list');
+                list.innerHTML = data.versions.map(v => `
+                    <li>
+                        <span class="version-name">${v.version}</span>
+                        <div class="actions">
+                            ${v.is_active ? '<span class="badge">LIVE</span>' : ''}
+                            <button class="btn btn-secondary btn-sm" onclick="openPromptVersion('${v.version}')">Open</button>
+                            ${!v.is_active ? `<button class="btn btn-success btn-sm" onclick="setActivePrompt('${v.version}')">Set Live</button>` : ''}
+                        </div>
+                    </li>
+                `).join('');
+            } catch (e) {
+                showToast(`Failed to load prompt versions: ${e.message}`, 'error');
+            }
+        }
+
+        async function openPromptVersion(version) {
+            try {
+                const data = await api('GET', `/api/prompts/versions/${version}`);
+                currentPromptFiles = data.files;
+                currentPromptVersion = version;
+                
+                document.getElementById('prompt-editor-card').style.display = 'block';
+                document.getElementById('prompt-editing-version').textContent = version;
+                
+                // Render tabs
+                const tabs = document.getElementById('prompt-editor-tabs');
+                const fileNames = Object.keys(currentPromptFiles);
+                tabs.innerHTML = fileNames.map((f, i) => 
+                    `<div class="editor-tab ${i === 0 ? 'active' : ''}" onclick="switchPromptTab('${f}')">${f.split('/').pop()}</div>`
+                ).join('');
+                
+                // Load first file
+                if (fileNames.length > 0) {
+                    switchPromptTab(fileNames[0]);
+                }
+            } catch (e) {
+                showToast(`Failed to open version: ${e.message}`, 'error');
+            }
+        }
+
+        function switchPromptTab(filename) {
+            // Save current content
+            if (currentPromptTab && currentPromptFiles[currentPromptTab] !== undefined) {
+                currentPromptFiles[currentPromptTab] = document.getElementById('prompt-editor').value;
+            }
+            
+            currentPromptTab = filename;
+            document.getElementById('prompt-editor').value = currentPromptFiles[filename] || '';
+            
+            // Update tab UI
+            document.querySelectorAll('#prompt-editor-tabs .editor-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent === filename.split('/').pop());
+            });
+        }
+
+        async function savePromptVersion() {
+            // Save current editor state
+            if (currentPromptTab) {
+                currentPromptFiles[currentPromptTab] = document.getElementById('prompt-editor').value;
+            }
+
+            const version = prompt('Enter new version name:', `${currentPromptVersion}_v2`);
+            if (!version) return;
+
+            try {
+                await api('POST', '/api/prompts/versions', {
+                    version,
+                    files: currentPromptFiles,
+                    changelog: `Based on ${currentPromptVersion}`
+                });
+                showToast(`Version "${version}" created`, 'success');
+                loadPromptVersions();
+            } catch (e) {
+                showToast(`Failed to save: ${e.message}`, 'error');
+            }
+        }
+
+        async function deployPromptVersion() {
+            const version = currentPromptVersion;
+            if (!confirm(`Deploy prompt version "${version}" as LIVE?`)) return;
+
+            try {
+                await api('PUT', '/api/prompts/active', { version });
+                showToast(`Version "${version}" is now LIVE`, 'success');
+                loadPromptVersions();
+            } catch (e) {
+                showToast(`Deploy failed: ${e.message}`, 'error');
+            }
+        }
+
+        async function setActivePrompt(version) {
+            if (!confirm(`Set "${version}" as the LIVE prompt version?`)) return;
+            try {
+                await api('PUT', '/api/prompts/active', { version });
+                showToast(`"${version}" is now LIVE`, 'success');
+                loadPromptVersions();
+            } catch (e) {
+                showToast(`Failed: ${e.message}`, 'error');
+            }
+        }
+
+        async function createNewPromptVersion() {
+            showToast('To create a new version, open an existing version and save with a new name', 'info');
+        }
+
+        // ─── Schema Management ──────────────────────────────
+        async function loadSchemaVersions() {
+            try {
+                const data = await api('GET', '/api/schemas/versions');
+                const list = document.getElementById('schema-versions-list');
+                list.innerHTML = data.versions.map(v => `
+                    <li>
+                        <span class="version-name">${v.version}</span>
+                        <div class="actions">
+                            ${v.is_active ? '<span class="badge">LIVE</span>' : ''}
+                            <button class="btn btn-secondary btn-sm" onclick="openSchemaVersion('${v.version}')">Open</button>
+                            ${!v.is_active ? `<button class="btn btn-success btn-sm" onclick="setActiveSchema('${v.version}')">Set Live</button>` : ''}
+                        </div>
+                    </li>
+                `).join('');
+            } catch (e) {
+                showToast(`Failed to load schema versions: ${e.message}`, 'error');
+            }
+        }
+
+        async function openSchemaVersion(version) {
+            try {
+                const data = await api('GET', `/api/schemas/versions/${version}`);
+                currentSchemaFiles = data.files;
+                currentSchemaVersion = version;
+                
+                document.getElementById('schema-editor-card').style.display = 'block';
+                document.getElementById('schema-editing-version').textContent = version;
+                
+                const tabs = document.getElementById('schema-editor-tabs');
+                const fileNames = Object.keys(currentSchemaFiles);
+                tabs.innerHTML = fileNames.map((f, i) => 
+                    `<div class="editor-tab ${i === 0 ? 'active' : ''}" onclick="switchSchemaTab('${f}')">${f}</div>`
+                ).join('');
+                
+                if (fileNames.length > 0) {
+                    switchSchemaTab(fileNames[0]);
+                }
+            } catch (e) {
+                showToast(`Failed to open schema version: ${e.message}`, 'error');
+            }
+        }
+
+        function switchSchemaTab(filename) {
+            if (currentSchemaTab && currentSchemaFiles[currentSchemaTab] !== undefined) {
+                currentSchemaFiles[currentSchemaTab] = document.getElementById('schema-editor').value;
+            }
+            
+            currentSchemaTab = filename;
+            document.getElementById('schema-editor').value = currentSchemaFiles[filename] || '';
+            
+            document.querySelectorAll('#schema-editor-tabs .editor-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent === filename);
+            });
+        }
+
+        async function saveSchemaVersion() {
+            if (currentSchemaTab) {
+                currentSchemaFiles[currentSchemaTab] = document.getElementById('schema-editor').value;
+            }
+
+            const version = prompt('Enter new version name:', `${currentSchemaVersion}_edited`);
+            if (!version) return;
+
+            try {
+                await api('POST', '/api/schemas/versions', {
+                    version,
+                    files: currentSchemaFiles,
+                    changelog: `Based on ${currentSchemaVersion}`
+                });
+                showToast(`Schema version "${version}" created`, 'success');
+                loadSchemaVersions();
+            } catch (e) {
+                showToast(`Failed to save: ${e.message}`, 'error');
+            }
+        }
+
+        async function deploySchemaVersion() {
+            const version = currentSchemaVersion;
+            if (!confirm(`Deploy schema version "${version}" as LIVE?`)) return;
+
+            try {
+                await api('PUT', '/api/schemas/active', { version });
+                showToast(`Schema "${version}" is now LIVE`, 'success');
+                loadSchemaVersions();
+            } catch (e) {
+                showToast(`Deploy failed: ${e.message}`, 'error');
+            }
+        }
+
+        async function setActiveSchema(version) {
+            if (!confirm(`Set "${version}" as the LIVE schema version?`)) return;
+            try {
+                await api('PUT', '/api/schemas/active', { version });
+                showToast(`"${version}" is now LIVE`, 'success');
+                loadSchemaVersions();
+            } catch (e) {
+                showToast(`Failed: ${e.message}`, 'error');
+            }
+        }
+
+        // ─── Schema Extraction ──────────────────────────────
+        let extractionPolling = null;
+
+        async function triggerExtraction() {
+            const btn = document.getElementById('btn-extract');
+            btn.disabled = true;
+            btn.textContent = '⏳ Running...';
+
+            try {
+                const result = await api('POST', '/api/schemas/extract');
+                
+                if (result.status === 'started') {
+                    showToast('Extraction job started', 'info');
+                    startPollingExtractionStatus();
+                } else if (result.status === 'completed') {
+                    showToast('Extraction completed!', 'success');
+                    updateExtractionStatus('completed', result.message || 'Done');
+                    loadSchemaVersions();
+                } else {
+                    showToast(`Extraction: ${result.status}`, 'error');
+                    updateExtractionStatus('error', result.error || 'Unknown error');
+                }
+            } catch (e) {
+                showToast(`Extraction failed: ${e.message}`, 'error');
+                updateExtractionStatus('error', e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Run Schema Extraction';
+            }
+        }
+
+        function startPollingExtractionStatus() {
+            updateExtractionStatus('running', 'Extraction in progress...');
+            extractionPolling = setInterval(async () => {
+                try {
+                    const status = await api('GET', '/api/schemas/extract/status');
+                    if (status.status !== 'running') {
+                        clearInterval(extractionPolling);
+                        updateExtractionStatus(status.status, status.message || 'Done');
+                        if (status.status === 'completed') {
+                            showToast('Schema extraction completed! New version available.', 'success');
+                            loadSchemaVersions();
+                        }
+                    }
+                } catch (e) {
+                    clearInterval(extractionPolling);
+                }
+            }, 5000);
+        }
+
+        function updateExtractionStatus(status, message) {
+            const el = document.getElementById('extraction-status');
+            const prefix = status === 'running' ? '<span class="spinner"></span>' : '';
+            el.innerHTML = `${prefix}<strong>Status:</strong> ${message}`;
+            el.className = `extraction-status ${status === 'running' ? 'running' : 'idle'}`;
+        }
+
+        // ─── Init ───────────────────────────────────────────
+        async function init() {
+            try {
+                await api('GET', '/api/prompts/active');
+                document.getElementById('connection-status').textContent = '● Connected';
+                document.getElementById('connection-status').style.color = '#4ecca3';
+            } catch {
+                document.getElementById('connection-status').textContent = '● Disconnected';
+                document.getElementById('connection-status').style.color = '#e94560';
+            }
+
+            loadPromptVersions();
+            loadSchemaVersions();
+        }
+
+        init();
+    </script>
+</body>
+</html>
