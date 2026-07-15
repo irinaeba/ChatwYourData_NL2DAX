@@ -215,6 +215,26 @@ def _build_filter_fragments(func: NativeFunction, params: Dict[str, Any]) -> Dic
         fragments["date_filter_var"] = "// No date filter applied"
         fragments["date_filter_ref"] = ""
 
+    # Rolling date filter for trend functions. A zero value means the user did
+    # not request a relative period, so the query must use all available data.
+    n_months = params.get("n_months", 0)
+    if n_months:
+        fragments["rolling_date_filter_var"] = (
+            f"VAR __ReferenceDate = TODAY()\n"
+            f"    VAR __StartRange = EOMONTH(__ReferenceDate, -{n_months}) + 1\n"
+            f"    VAR __EndRange = EOMONTH(__ReferenceDate, -1)\n\n"
+            f"    VAR __DateFilter =\n"
+            f"        FILTER(\n"
+            f"            ALL('dim_date'),\n"
+            f"            'dim_date'[date_key] >= INT(FORMAT(__StartRange, \"YYYYMMDD\")) &&\n"
+            f"            'dim_date'[date_key] <= INT(FORMAT(__EndRange, \"YYYYMMDD\"))\n"
+            f"        )"
+        )
+        fragments["rolling_date_filter_ref"] = "__DateFilter,"
+    else:
+        fragments["rolling_date_filter_var"] = "// No rolling date filter applied"
+        fragments["rolling_date_filter_ref"] = ""
+
     # Impact levels formatting (for downtime_high_public_impact)
     impact_levels = params.get("impact_levels", "")
     if impact_levels:

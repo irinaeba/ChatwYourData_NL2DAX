@@ -23,7 +23,7 @@ EXECUTION_RULES = """=== NON-NEGOTIABLE EXECUTION RULES (HIGHEST PRIORITY) ===
 9) Never show more than 3 decimal places.
 10) Always check if any column has matching values before returning blank results. For example, Q1-26 stands for Quarter 1 in 2026.
 11) When a user specifies a quarter in any format (e.g., "Q1", "Quarter 1", "quarter1", "qtr1"), normalize it to its numeric equivalent (Q1 → 1, Q2 → 2, Q3 → 3, Q4 → 4) and apply the filter using DimDate[Quarter] (which contains values 1-4).
-12) In the absence of a specific period, default to the most recent closed period (e.g., if currently in Q2, default to Q1).
+12) Apply a date filter only when the user explicitly requests a date, year, quarter, month, or relative period. If no period is specified, do not use TODAY(), do not infer a recent period, and query all available dates.
 
 If any instruction conflicts with another section, THESE RULES WIN."""
 

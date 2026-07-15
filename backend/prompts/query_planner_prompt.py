@@ -22,14 +22,14 @@ Ask for clarification ONLY when the question is genuinely ambiguous AND getting 
 
 Trigger clarification when:
 1. **Missing metric** — The user asks about performance or trends but doesn't specify which metric (e.g., "How is ADAFSA doing?" — NPS? CSAT? CES? Transactions?).
-2. **Missing time period** — The user asks for a trend or comparison but gives no time range (e.g., "Show me the CSAT trend" — last 3 months? last year? YTD?).
-3. **Missing entity/scope** — The user asks about a change without specifying scope (e.g., "Why did NPS drop?" — for which entity? overall? which service?).
-4. **Vague analysis intent** — The user's analytical goal is unclear (e.g., "Analyze feedback" — breakdown by entity? trend over time? compare services?).
+2. **Missing entity/scope** — The user asks about a change without specifying scope (e.g., "Why did NPS drop?" — for which entity? overall? which service?).
+3. **Vague analysis intent** — The user's analytical goal is unclear (e.g., "Analyze feedback" — breakdown by entity? trend over time? compare services?).
 
 Do NOT ask for clarification when:
 - The question is clear enough to produce a reasonable plan.
 - There is conversation history that resolves the ambiguity (e.g., prior turn mentioned "Department of Energy" and user says "what about their NPS?").
-- A sensible default exists (e.g., "top 10" when count is unspecified, "most recent month" when no time stated for a single-value query).
+- A sensible non-temporal default exists (e.g., "top 10" when count is unspecified).
+- The user does not specify a time period. Preserve that omission so downstream analysis uses all available dates.
 - If the user doesn't specify the adge or entity or service. Assume that the question is for overall KPI performance.
 
 ## Rules for Execution Plans
@@ -41,6 +41,7 @@ Do NOT ask for clarification when:
 5. **`depends_on`** — When a step depends on a prior step's output (e.g., it needs entity names or values discovered by the prior step), set `depends_on` to that step's `id`. The system will inject the prior step's result as context automatically — you do NOT need to reference it in the `query`.
 6. **Domain assignment** — Assign each step to the single most appropriate domain. Never assign a step to a domain that doesn't exist.
 7. **Preserve user intent** — Do not invent questions the user didn't ask. Each sub-query should directly serve the original question.
+8. **Preserve temporal scope** — Never add "most recent", "current", "last N", TODAY-based, or any other date restriction unless the user explicitly requested it. If the user gives no period, the sub-query must also give no period so all available dates are queried.
 
 ## Output Format
 

@@ -226,7 +226,7 @@ ORDER BY
     NativeFunction(
         name="work_order_monthly_trend",
         domain="work_orders",
-        description="Work order count trend over the last N months. Use for any question about work order volume trends over time.",
+        description="Monthly work order count trend. Apply a rolling last-N-months filter only when the user explicitly requests one; otherwise use all available dates.",
         examples=[
             "Show me work order trend for the last 6 months",
             "Monthly work order count",
@@ -238,9 +238,9 @@ ORDER BY
             NativeFunctionParameter(
                 name="n_months",
                 type="integer",
-                description="Number of completed months to look back",
+                description="Number of completed months to look back. Use 0 when no relative period is specified.",
                 required=False,
-                default=6,
+                default=0,
             ),
             NativeFunctionParameter(
                 name="region_filter",
@@ -251,16 +251,7 @@ ORDER BY
             ),
         ],
         dax_template="""DEFINE
-    VAR __ReferenceDate = TODAY()
-    VAR __StartRange = EOMONTH(__ReferenceDate, -{n_months}) + 1
-    VAR __EndRange = EOMONTH(__ReferenceDate, -1)
-
-    VAR __DateFilter =
-        FILTER(
-            ALL('dim_date'),
-            'dim_date'[date_key] >= INT(FORMAT(__StartRange, "YYYYMMDD")) &&
-            'dim_date'[date_key] <= INT(FORMAT(__EndRange, "YYYYMMDD"))
-        )
+    {rolling_date_filter_var}
 
     {region_filter_var}
 
@@ -269,7 +260,7 @@ ORDER BY
             'dim_date'[year],
             'dim_date'[month_number],
             'dim_date'[month_name],
-            __DateFilter,
+            {rolling_date_filter_ref}
             {region_filter_ref}
             "Work Order Count", COUNTROWS('fact_work_orders')
         )
@@ -700,7 +691,7 @@ ORDER BY
     NativeFunction(
         name="complaint_monthly_trend",
         domain="citizen_complaints",
-        description="Citizen complaint count trend over the last N months. Use for questions about complaint volume trends, monthly complaints, or how complaints are changing over time.",
+        description="Monthly citizen complaint count trend. Apply a rolling last-N-months filter only when the user explicitly requests one; otherwise use all available dates.",
         examples=[
             "Show monthly complaint trends",
             "Complaint count over last 6 months",
@@ -712,9 +703,9 @@ ORDER BY
             NativeFunctionParameter(
                 name="n_months",
                 type="integer",
-                description="Number of completed months to look back",
+                description="Number of completed months to look back. Use 0 when no relative period is specified.",
                 required=False,
-                default=6,
+                default=0,
             ),
             NativeFunctionParameter(
                 name="region_filter",
@@ -725,16 +716,7 @@ ORDER BY
             ),
         ],
         dax_template="""DEFINE
-    VAR __ReferenceDate = TODAY()
-    VAR __StartRange = EOMONTH(__ReferenceDate, -{n_months}) + 1
-    VAR __EndRange = EOMONTH(__ReferenceDate, -1)
-
-    VAR __DateFilter =
-        FILTER(
-            ALL('dim_date'),
-            'dim_date'[date_key] >= INT(FORMAT(__StartRange, "YYYYMMDD")) &&
-            'dim_date'[date_key] <= INT(FORMAT(__EndRange, "YYYYMMDD"))
-        )
+    {rolling_date_filter_var}
 
     {region_filter_var}
 
@@ -743,7 +725,7 @@ ORDER BY
             'dim_date'[year],
             'dim_date'[month_number],
             'dim_date'[month_name],
-            __DateFilter,
+            {rolling_date_filter_ref}
             {region_filter_ref}
             "Complaint Count", COUNTROWS('fact_citizen_complaints'),
             "Avg Response Time (hrs)", AVERAGE('fact_citizen_complaints'[response_time_hours])

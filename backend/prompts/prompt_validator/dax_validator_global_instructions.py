@@ -52,7 +52,7 @@ Your task is to validate a generated DAX query against the user's question and t
 - Use dim_date columns: year, quarter, month_name, month_number, year_month
 - Always sort ascending by date columns when date is present.
 - When a user specifies a quarter in any format (e.g., "Q1", "Quarter 1", "quarter1", "qtr1"), normalize it to its numeric equivalent (Q1 → 1, Q2 → 2, Q3 → 3, Q4 → 4) and apply the filter using dim_date[quarter].
-- In the absence of a specific period, default to the most recent closed period.
+- Apply a date filter only when the user explicitly requests a date, year, quarter, month, or relative period. If no period is specified, preserve queries over all available dates and do not introduce TODAY() or a recent-period filter.
 
 === SORTING RULES ===
 - ALWAYS sort ascending by lowest granularity DATE column when date is present in answers.
